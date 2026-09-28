@@ -179,7 +179,6 @@ t_uma_so() {
   printf '#!/bin/bash\ntouch "%s/reabriu"\n' "$pasta" > "$pasta/novo"
   chmod +x "$pasta/novo"
   mv "$pasta/novo" "$pasta/ClaudeMonitor"
-  local i
   for _ in $(seq 1 20); do [ -f "$pasta/reabriu" ] && break; sleep 0.5; done
   kill -9 $primeira 2>/dev/null
   [ -f "$pasta/reabriu" ] || falha "não se reabriu com o binário novo"
