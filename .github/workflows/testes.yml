@@ -37,6 +37,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: dist, path: dist/ }
       - run: npm run testar
+      - name: ffmpeg (pra testar a conversão dos sons do Minecraft)
+        run: brew install ffmpeg
+        env: { HOMEBREW_NO_AUTO_UPDATE: 1, HOMEBREW_NO_INSTALL_CLEANUP: 1 }
       - run: bash testes/mac/testes.sh "$RUNNER_TEMP/saida"
       - if: always()
         uses: actions/upload-artifact@v4
