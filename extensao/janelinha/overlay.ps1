@@ -186,7 +186,9 @@ function UltimoPedido($transcript) {
                 if ($l -match '"type":"tool_use"') { if ($l -match '"name":"AskUserQuestion"') { $resultado = 'caixa' } }
                 elseif ($l -match '"type":"text"') {
                     $bloco = @(($l | ConvertFrom-Json).message.content)[-1]
-                    if (($bloco.text.Trim() -split "`n")[-1] -match '\?') { $resultado = 'texto' }
+                    # "?" entre aspas ou crases é citação (fala de cliente, exemplo), não pergunta pra você
+                    $ultima = ($bloco.text.Trim() -split "`n")[-1] -replace '"[^"]*"|“[^”]*”|`[^`]*`', ''
+                    if ($ultima -match '\?') { $resultado = 'texto' }
                 }
             }
             break

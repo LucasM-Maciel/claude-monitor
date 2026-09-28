@@ -175,7 +175,9 @@ func ultimoPedido(_ transcript: String) -> String? {
             if bloco["type"] as? String == "tool_use" {
                 if bloco["name"] as? String == "AskUserQuestion" { resultado = "caixa" }
             } else if bloco["type"] as? String == "text", let texto = bloco["text"] as? String {
-                let ultima = texto.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n").last ?? ""
+                // "?" entre aspas ou crases é citação (fala de cliente, exemplo), não pergunta pra você
+                let ultima = (texto.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n").last ?? "")
+                    .replacingOccurrences(of: "\"[^\"]*\"|“[^”]*”|`[^`]*`", with: "", options: .regularExpression)
                 if ultima.contains("?") { resultado = "texto" }
             }
         }

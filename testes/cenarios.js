@@ -9,7 +9,8 @@
 //  - 1ª mensagem sem título: o hook grava o nome da pasta ("meu-projeto"); vale o do transcript
 //  - /rename ganha do título automático, mesmo vindo antes
 //  - permissão aprovada (transcript mexeu depois do pedido) = trabalhando
-//  - pergunta no fim do texto, caixinha aberta, caixinha já respondida
+//  - pergunta no fim do texto (em negrito, ou seguida de uma frase), "?" em citação
+//    (aspas/crases) não conta, caixinha aberta, caixinha já respondida
 //  - texto de subagente (isSidechain) não conta
 //  - transcript > 64 KB (a leitura do fim corta a 1ª linha no meio)
 //  - acento e emoji; transcript que sumiu
@@ -109,6 +110,20 @@ if (cenario === "misto") {
         estado: "waiting", mostra: ["Pergunta no fim do texto", "question"],
         linhas: [titulo("Pergunta no fim do texto"), enchimento(), enchimento(),
             texto("Fiz as mudanças.\n\nPosso seguir com o deploy?\n")],
+    });
+    sessao("pergunta-e-frase", {  // pergunta seguida de contexto continua sendo pergunta
+        estado: "waiting", mostra: ["Pergunta seguida de frase", "question"],
+        linhas: [titulo("Pergunta seguida de frase"),
+            texto("Renomeei o repositório.\n\nQuer o nome novo também no produto? Por enquanto só o repositório mudou.")],
+    });
+    sessao("pergunta-negrito", {
+        estado: "waiting", mostra: ["Pergunta em negrito", "question"],
+        linhas: [titulo("Pergunta em negrito"), texto("Pronto.\n\n**Posso seguir com o deploy?**  \n")],
+    });
+    sessao("citacao", {  // "?" entre aspas/crases é fala citada, não pergunta pra você
+        estado: "waiting", mostra: ["Citação com interrogação", "finished"],
+        linhas: [titulo("Citação com interrogação"),
+            texto("Feito.\n\nTestei o \"consegue vir?\", o “Tem Voyage?” e o `troca?`, 3 rodadas cada.")],
     });
     sessao("terminou", {
         estado: "waiting", mostra: ["Terminou", "finished"],
