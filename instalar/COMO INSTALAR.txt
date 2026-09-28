@@ -21,4 +21,4 @@ MAC
   4. Feche e abra o VS Code.
 
 Pronto: a janelinha aparece no canto de baixo à direita.
-Tutorial completo: https://github.com/LucasM-Maciel/claude-monitor
+Tutorial completo: https://github.com/LucasM-Maciel/ticlins-claude-monitor

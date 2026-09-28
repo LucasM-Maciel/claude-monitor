@@ -7,7 +7,7 @@ você, ela avisa com um som.
 
 ![A janelinha: 4 sessões e o uso de 5h e 7 dias](docs/janelinha.png)
 
-**[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows e Mac no mesmo arquivo)
+**[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows e Mac no mesmo arquivo)
 
 ## O que ela mostra
 
@@ -41,7 +41,7 @@ Precisa ter:
 
 ### Windows
 
-1. [Baixe o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/claude-monitor/releases/latest/download/ClaudeMonitor.zip).
+1. [Baixe o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip).
 2. Botão direito no arquivo > **Extrair tudo**.
 3. Dentro da pasta extraída, dê duplo clique em **`instalar-windows.cmd`**.
    Se aparecer "O Windows protegeu o computador", clique em
@@ -50,7 +50,7 @@ Precisa ter:
 
 ### Mac
 
-1. [Baixe o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/claude-monitor/releases/latest/download/ClaudeMonitor.zip)
+1. [Baixe o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)
    e dê duplo clique nele (o Mac extrai sozinho).
 2. Abra o **Terminal** (`Cmd + Espaço`, digite *Terminal*, Enter).
 3. Digite `bash ` (com um espaço no fim), **arraste o arquivo

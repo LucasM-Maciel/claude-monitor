@@ -19,4 +19,4 @@ olhando aba por aba pra saber quem terminou.
 Arrastar move a janelinha. Duplo clique traz o VS Code. Botão direito > Fechar.
 Pra reabrir: `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) > **Claude Monitor: Abrir janelinha flutuante**.
 
-Instalação e tutorial: https://github.com/LucasM-Maciel/claude-monitor
+Instalação e tutorial: https://github.com/LucasM-Maciel/ticlins-claude-monitor
