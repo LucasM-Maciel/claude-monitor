@@ -145,7 +145,7 @@ t_cenario() {
   [ "$(pixels "$foto" 24 24 24 10)" -gt 5000 ] || falha "cadê o cartão escuro?" || return 1
   [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)?" || return 1
   if [ "$c" = andando ]; then
-    [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png"
+    [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)"
   else
     [ "$(pixels "$foto" 74 237 217 40)" -gt 5 ] || falha "cadê a picareta desenhada (ciano)?"
   fi
