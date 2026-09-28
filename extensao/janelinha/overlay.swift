@@ -622,12 +622,13 @@ func atualizar() {
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
         return (cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo)
     }
-    // pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado
+    buscarUso()
+    cartao.arrumar()  // redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
+    // pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado.
+    // Depois do arrumar: na 1ª vez o cartão ainda tem largura 0 e o Clawd sairia por baixo
     let situacoes = Set(sessoes.map { $0.situacao })
     palco.mudar(situacoes.contains("question") || situacoes.contains("permission") ? "pulando"
                 : situacoes.contains("working") ? "andando" : "parado")
-    buscarUso()
-    cartao.arrumar()  // redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
     palco.needsDisplay = true
     if let foto = arquivoFoto {
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }

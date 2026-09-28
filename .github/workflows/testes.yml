@@ -28,6 +28,7 @@ jobs:
       matrix:
         os: [macos-14, macos-15]  # Xcode 15 (Swift 5.10) e Xcode 16 (Swift 6)
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,6 +45,7 @@ jobs:
   windows:
     needs: pacote
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

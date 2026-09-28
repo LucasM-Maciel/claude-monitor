@@ -24,19 +24,19 @@ teste() {
   fi
 }
 falha() { echo "$*"; return 1; }
-# roda com prazo: travou = falha (e mata)
+# roda com prazo: travou = falha (e mata). Vigia sem processo à parte: um
+# "sleep" órfão segurava o $(...) aberto e cada chamada esperava o prazo inteiro
 com_prazo() {
-  local s=$1
+  local s=$1 t=0
   shift
   "$@" &
   local p=$!
-  (sleep "$s"; kill -9 "$p" 2>/dev/null) &
-  local vigia=$!
+  while kill -0 "$p" 2>/dev/null; do
+    if [ $t -ge $((s * 10)) ]; then kill -9 "$p" 2>/dev/null; break; fi
+    sleep 0.1
+    t=$((t + 1))
+  done
   wait "$p"
-  local r=$?
-  kill "$vigia" 2>/dev/null
-  wait "$vigia" 2>/dev/null
-  return $r
 }
 
 echo "macOS $(sw_vers -productVersion) — $(xcrun swiftc --version 2>&1 | head -1)"
