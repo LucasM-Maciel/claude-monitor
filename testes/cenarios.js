@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -51,14 +51,17 @@ const resultado = (id = "t1") => ({
 const enchimento = () => texto("x".repeat(100 * 1024));  // uma linha de 100 KB
 
 const esperado = [];
+const antes = {};  // id -> situação na leitura anterior (vira antes.json: decide o som)
 let ordem = 0;
 /**
  * Cria a sessão. `mostra` = [nome, situação] que a janelinha tem que mostrar
  * (null = não pode aparecer). Quanto antes criada, mais em cima (updated maior).
+ * `antes` = situação que a janelinha tinha visto antes (pra testar o som da mudança).
  */
-function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra }) {
+function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra, antes: situacaoAntes }) {
     fs.mkdirSync(dirSessoes, { recursive: true });
     ordem += 1;
+    if (situacaoAntes) antes[id] = situacaoAntes;
     const transcript = path.join(dirTranscripts, `${id}.jsonl`);
     if (linhas && !semTranscript) {
         fs.writeFileSync(transcript, linhas.map((l) => JSON.stringify(l)).join("\n") + "\n");
@@ -92,6 +95,7 @@ function uso(cinco, sete) {
 
 let clawd;
 let temUso = false;
+let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup
 if (cenario === "misto") {
     sessao("renomeada", {
         estado: "working", mostra: ["Minha sessão renomeada", "working"],
@@ -180,12 +184,33 @@ if (cenario === "misto") {
     temUso = true;
 } else if (cenario === "vazio") {
     clawd = "parado";  // sem pasta sessions nenhuma
+} else if (cenario === "levelup") {  // a última terminou e não sobrou nada: sobe de nível
+    sessao("a", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    sessao("b", { estado: "waiting", antes: "finished", mostra: ["Testes verdes", "finished"], linhas: [titulo("Testes verdes"), texto("Pronto.")] });
+    clawd = "parado";
+    som = "levelup";
+} else if (cenario === "xp-rodando") {  // terminou uma, outra ainda roda: só XP
+    sessao("a", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    sessao("b", { estado: "working", antes: "working", mostra: ["Ainda rodando", "working"], linhas: [titulo("Ainda rodando"), ferramenta("Bash")] });
+    clawd = "andando";
+    som = "xp";
+} else if (cenario === "xp-esperando") {  // terminou uma, outra espera você: só XP
+    sessao("a", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    sessao("b", { estado: "waiting", antes: "question", mostra: ["Esperando você", "question"], linhas: [titulo("Esperando você"), texto("Posso seguir?")] });
+    clawd = "pulando";
+    som = "xp";
+} else if (cenario === "aldeao") {  // terminou e perguntou juntas: o aldeão ganha
+    sessao("a", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    sessao("b", { estado: "waiting", antes: "working", mostra: ["Esperando você", "question"], linhas: [titulo("Esperando você"), texto("Posso seguir?")] });
+    clawd = "pulando";
+    som = "aldeao";
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);
 }
 
+if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
-linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
+linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");
 console.log(linhas.join("\n"));

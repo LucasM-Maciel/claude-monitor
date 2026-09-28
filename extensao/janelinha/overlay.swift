@@ -59,18 +59,22 @@ let estados: [String: (cor: String, rotulo: String)] = [
     "permission": ("#FACC15", "pedindo permissão"),
 ]
 
-// --- sons: "hmm" do aldeão = pergunta/permissão, XP = terminou (com mais de um, sorteia)
+// --- sons: "hmm" do aldeão = pergunta/permissão, XP = terminou, subir de nível =
+// terminou a última (nada rodando nem esperando). Com mais de um, sorteia.
 func sonsDoMinecraft(_ nomes: [String]) -> [String] {
     nomes.map { pasta + "/sons/" + $0 + ".wav" }.filter { FileManager.default.fileExists(atPath: $0) }
 }
 let aldeao = sonsDoMinecraft(["aldeao_hmm1", "aldeao_hmm2"])
 let xp = sonsDoMinecraft(["xp1", "xp2", "xp3"])
+let levelup = sonsDoMinecraft(["levelup"])
+let nomeDoSom = ["permission": "aldeao", "question": "aldeao", "finished": "xp", "tudo": "levelup"]  // pro .txt do --foto
 var tocando: NSSound?  // segura o som até acabar de tocar
 func tocar(_ situacao: String) {
-    let pedido = situacao != "finished"
+    // sem Minecraft, sons do Mac
+    let (arquivos, doMac) = situacao == "tudo" ? (levelup, "Hero") : situacao == "finished" ? (xp, "Glass") : (aldeao, "Ping")
     var som: NSSound?
-    if let arquivo = (pedido ? aldeao : xp).randomElement() { som = NSSound(contentsOfFile: arquivo, byReference: true) }
-    if som == nil { som = NSSound(named: NSSound.Name(pedido ? "Ping" : "Glass")) }
+    if let arquivo = arquivos.randomElement() { som = NSSound(contentsOfFile: arquivo, byReference: true) }
+    if som == nil { som = NSSound(named: NSSound.Name(doMac)) }
     tocando?.stop()
     tocando = som
     som?.play()
@@ -206,7 +210,14 @@ func situacao(_ s: Sessao) -> String {
 
 // som quando alguma sessão MUDA de situação pra terminou/pergunta/permissão (uma
 // vez por mudança; na abertura não toca). Se vierem juntas, o aldeão ganha do XP.
+// Terminou a última (todas terminadas, nada rodando nem esperando): sobe de nível.
 var ultimaSituacao: [String: String] = [:]
+// teste: o --foto parte da situação anterior em antes.json, pra ver qual som tocaria
+if arquivoFoto != nil, let dados = FileManager.default.contents(atPath: pasta + "/antes.json"),
+   let antes = (try? JSONSerialization.jsonObject(with: dados)) as? [String: String] {
+    ultimaSituacao = antes
+}
+var somDaVez: String?  // o último som decidido (o --foto grava no .txt em vez de tocar)
 func avisar(_ sessoes: [Sessao]) {
     var tocar_: String?
     for s in sessoes {
@@ -216,7 +227,10 @@ func avisar(_ sessoes: [Sessao]) {
         }
         ultimaSituacao[s.id] = s.situacao
     }
-    if let t = tocar_ { tocar(t) }
+    if tocar_ == "finished", sessoes.allSatisfy({ $0.situacao == "finished" }) { tocar_ = "tudo" }
+    guard let t = tocar_ else { return }
+    somDaVez = t
+    if arquivoFoto == nil { tocar(t) }
 }
 
 func tempo(_ minutos: Double) -> String {
@@ -634,7 +648,8 @@ func atualizar() {
     palco.needsDisplay = true
     if let foto = arquivoFoto {
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
-            + ["clawd: \(palco.modo)", "usage: \(uso == nil ? "indisponivel" : "ok")"]
+            + ["clawd: \(palco.modo)", "usage: \(uso == nil ? "indisponivel" : "ok")",
+               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
     seAtualizou()

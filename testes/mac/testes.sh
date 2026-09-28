@@ -163,7 +163,7 @@ t_cenario() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 t_cores() {

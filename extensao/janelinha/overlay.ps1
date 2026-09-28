@@ -32,19 +32,28 @@ $estados = @{
     question   = @('#60A5FA', 'pergunta pra você')
     permission = @('#FACC15', 'pedindo permissão')
 }
-# com mais de um, sorteia. Outros na pasta sons\: levelup, pop, aldeao_sim,
-# pling, sino, bigorna, gato. Com a janelinha aberta a extensão não toca som.
+# com mais de um, sorteia. Outros na pasta sons\: pop, aldeao_sim, pling, sino,
+# bigorna, gato. Com a janelinha aberta a extensão não toca som.
 $aldeao = @(1..2 | ForEach-Object { "$Pasta\sons\aldeao_hmm$_.wav" } | Where-Object { Test-Path $_ })
 $xp = @(1..3 | ForEach-Object { "$Pasta\sons\xp$_.wav" } | Where-Object { Test-Path $_ })
+$levelup = @("$Pasta\sons\levelup.wav") | Where-Object { Test-Path $_ }
 if (-not $aldeao) { $aldeao = @("$env:WINDIR\Media\Windows Notify Messaging.wav") }
 if (-not $xp) { $xp = @("$env:WINDIR\Media\Windows Notify System Generic.wav") }
+if (-not $levelup) { $levelup = @("$env:WINDIR\Media\tada.wav") }
 $sons = @{
-    permission = $aldeao  # "hmm" do aldeão
+    permission = $aldeao   # "hmm" do aldeão
     question   = $aldeao
-    finished   = $xp      # pegar XP
+    finished   = $xp       # pegar XP
+    tudo       = $levelup  # subir de nível: a última terminou e não sobrou nada rodando nem esperando
 }
+$nomeDoSom = @{ permission = 'aldeao'; question = 'aldeao'; finished = 'xp'; tudo = 'levelup' }  # pro .txt do -Foto
 $tocador = New-Object Media.SoundPlayer
 $ultimo = @{}  # id da sessão -> última situação vista
+# teste: o -Foto parte da situação anterior em antes.json, pra ver qual som tocaria
+if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
+    (Get-Content -LiteralPath "$Pasta\antes.json" -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $ultimo[$_.Name] = $_.Value }
+}
+$somDaVez = $null  # o último som decidido (o -Foto grava no .txt em vez de tocar)
 $uso = @{ proxima = [DateTime]::MinValue; dados = $null }  # usage é buscado a cada 2 min
 if ($Foto) { $uso = @{ proxima = [DateTime]::MaxValue; dados = $(if ($ArquivoUso) { Get-Content $ArquivoUso -Raw | ConvertFrom-Json }) } }
 $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a picareta
@@ -217,6 +226,7 @@ function Situacao($s) {
 
 # som quando alguma sessão MUDA de situação pra terminou/pergunta/permissão (uma
 # vez por mudança; na abertura não toca). Se vierem juntas, o aldeão ganha do XP.
+# Terminou a última (todas terminadas, nada rodando nem esperando): sobe de nível.
 function Avisar($sessoes) {
     $tocar = $null
     foreach ($s in $sessoes) {
@@ -224,7 +234,10 @@ function Avisar($sessoes) {
         if ($antes -and $antes -ne $s.situacao -and $sons[$s.situacao] -and $tocar -notin 'permission', 'question') { $tocar = $s.situacao }
         $ultimo[$s.id] = $s.situacao
     }
+    if ($tocar -eq 'finished' -and -not @($sessoes | Where-Object { $_.situacao -ne 'finished' })) { $tocar = 'tudo' }
     if ($tocar) {
+        $script:somDaVez = $tocar
+        if ($Foto) { return }
         $tocador.SoundLocation = $sons[$tocar] | Get-Random
         $tocador.Play()
     }
@@ -543,7 +556,8 @@ if ($Foto) {
         try { $png.Save($arquivo) } finally { $arquivo.Dispose() }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
-        }) + "clawd: $($passeio.modo)" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })"
+        }) + "clawd: $($passeio.modo)" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+            "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))
         $win.Close()
     })

@@ -121,7 +121,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
