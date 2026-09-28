@@ -1,0 +1,24 @@
+CLAUDE MONITOR — como instalar
+================================
+
+Precisa ter: Claude Code (logado com a conta do Claude), VS Code (ou Cursor)
+e Node.js (https://nodejs.org, versão LTS).
+
+WINDOWS
+  1. Botão direito no ClaudeMonitor.zip > "Extrair tudo".
+  2. Dentro da pasta extraída, duplo clique em  instalar-windows.cmd
+     (se o Windows avisar "O Windows protegeu o computador":
+      "Mais informações" > "Executar assim mesmo").
+  3. Feche e abra o VS Code.
+
+MAC
+  1. Duplo clique no ClaudeMonitor.zip (o Mac extrai sozinho).
+  2. Abra o Terminal (Cmd+Espaço, digite Terminal, Enter).
+  3. Digite  bash  e um espaço, arraste o arquivo instalar-mac.sh pra janela
+     do Terminal e aperte Enter.
+     (Na 1ª vez o Mac pode pedir pra instalar as "ferramentas de linha de
+      comando": clique em Instalar, espere e rode o passo 3 de novo.)
+  4. Feche e abra o VS Code.
+
+Pronto: a janelinha aparece no canto de baixo à direita.
+Tutorial completo: https://github.com/LucasM-Maciel/claude-monitor

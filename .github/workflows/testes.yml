@@ -1,0 +1,75 @@
+# Monta o pacote UMA vez e testa ESSE pacote (o que os amigos baixam) num Mac e
+# num Windows de verdade. Numa tag v*, publica o .zip na página de download.
+name: testes
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pacote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run empacotar
+      - name: shellcheck nos scripts do Mac
+        run: shellcheck -S warning instalar/*.sh extensao/janelinha/*.sh testes/mac/*.sh
+      - run: npm run testar
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist/ }
+
+  mac:
+    needs: pacote
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]  # Xcode 15 (Swift 5.10) e Xcode 16 (Swift 6)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - run: npm run testar
+      - run: bash testes/mac/testes.sh "$RUNNER_TEMP/saida"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: "prints-${{ matrix.os }}", path: "${{ runner.temp }}/saida" }
+
+  windows:
+    needs: pacote
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - run: npm run testar
+      - name: testes no PowerShell 5.1 (o que vem no Windows)
+        shell: powershell
+        run: .\testes\windows\testes.ps1 -Saida "$env:RUNNER_TEMP\saida"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: prints-windows, path: "${{ runner.temp }}/saida" }
+
+  publicar:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/ClaudeMonitor.zip dist/*.vsix
+          --repo "$GITHUB_REPOSITORY" --title "Claude Monitor $GITHUB_REF_NAME"
+          --notes "Baixe o ClaudeMonitor.zip e siga o tutorial: https://github.com/$GITHUB_REPOSITORY#como-instalar"

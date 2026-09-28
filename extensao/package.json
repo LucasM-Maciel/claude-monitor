@@ -1,0 +1,119 @@
+{
+	"name": "claude-monitor",
+	"displayName": "Claude Monitor",
+	"description": "Janelinha sempre por cima com as sessões do Claude Code (trabalhando / terminou / pergunta / permissão), o seu usage de 5h e 7 dias e o Clawd andando em volta. No VS Code: lista das sessões com clique pra ir na certa.",
+	"version": "0.4.0",
+	"publisher": "local",
+	"license": "UNLICENSED",
+	"engines": {
+		"vscode": "^1.85.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "claudeMonitor",
+					"title": "Claude Monitor",
+					"icon": "media/icon.svg"
+				}
+			]
+		},
+		"views": {
+			"claudeMonitor": [
+				{
+					"id": "claudeMonitor.sessions",
+					"name": "Sessões do Claude"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "claudeMonitor.focusSession",
+				"title": "Claude Monitor: Focar sessão"
+			},
+			{
+				"command": "claudeMonitor.markSeen",
+				"title": "Marcar como vista",
+				"icon": "$(eye)"
+			},
+			{
+				"command": "claudeMonitor.refresh",
+				"title": "Claude Monitor: Atualizar",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "claudeMonitor.debug",
+				"title": "Claude Monitor: Diagnóstico de terminais"
+			},
+			{
+				"command": "claudeMonitor.installHooks",
+				"title": "Claude Monitor: Instalar hooks no Claude Code"
+			},
+			{
+				"command": "claudeMonitor.openOverlay",
+				"title": "Claude Monitor: Abrir janelinha flutuante"
+			},
+			{
+				"command": "claudeMonitor.minecraft",
+				"title": "Claude Monitor: Usar sons do Minecraft"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "claudeMonitor.refresh",
+					"when": "view == claudeMonitor.sessions",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "claudeMonitor.markSeen",
+					"when": "view == claudeMonitor.sessions && viewItem == claudeSession.unseen",
+					"group": "inline"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "claudeMonitor.focusSession",
+					"when": "false"
+				},
+				{
+					"command": "claudeMonitor.markSeen",
+					"when": "false"
+				}
+			]
+		},
+		"configuration": {
+			"title": "Claude Monitor",
+			"properties": {
+				"claudeMonitor.playSound": {
+					"type": "boolean",
+					"default": true,
+					"description": "Tocar som quando uma sessão termina ou pede permissão (com a janelinha aberta, quem toca é ela)."
+				},
+				"claudeMonitor.showNotifications": {
+					"type": "boolean",
+					"default": true,
+					"description": "Mostrar notificação (só na janela focada) quando uma sessão termina ou pede permissão."
+				},
+				"claudeMonitor.overlay": {
+					"type": "boolean",
+					"default": true,
+					"description": "Abrir a janelinha flutuante (sempre por cima, fora do VS Code) com as sessões, o usage e o Clawd. Windows e Mac."
+				}
+			}
+		}
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/LucasM-Maciel/claude-monitor"
+	}
+}

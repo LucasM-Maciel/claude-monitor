@@ -1,0 +1,6 @@
+# o bash do Mac quebra com CRLF; o cmd do Windows prefere CRLF
+*.sh   text eol=lf
+*.swift text eol=lf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+*.png  binary
