@@ -22,9 +22,11 @@ Write-Host "Claude Monitor $versao" -ForegroundColor Cyan
 Passo 'Procurando o VS Code / Cursor'
 $editores = @()
 foreach ($e in @(
-        @{ nome = 'VS Code'; cmd = 'code.cmd'; fixos = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd", "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd") },
+        # o Cursor põe um code.cmd dele no PATH (...\cursor\resources\app\codeBin): esse não é o VS Code
+        @{ nome = 'VS Code'; cmd = 'code.cmd'; fora = '\\cursor\\'; fixos = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd", "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd") },
         @{ nome = 'Cursor'; cmd = 'cursor.cmd'; fixos = @("$env:LOCALAPPDATA\Programs\cursor\resources\app\bin\cursor.cmd") })) {
-    $exe = (Get-Command $e.cmd -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    $exe = Get-Command $e.cmd -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source } |
+        Where-Object { -not $e.fora -or $_ -notmatch $e.fora } | Select-Object -First 1
     if (-not $exe) { $exe = $e.fixos | Where-Object { Test-Path $_ } | Select-Object -First 1 }
     if ($exe) { $editores += @{ nome = $e.nome; exe = $exe }; Ok "$($e.nome): $exe" }
 }

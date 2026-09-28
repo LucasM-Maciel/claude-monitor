@@ -282,6 +282,17 @@ Teste 'rodar o instalador de novo não duplica os hooks' {
     $hooks = (Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks
     Verdade (@($hooks.Stop).Count -eq 1) 'duplicou'
 }
+Teste 'com o code.cmd do Cursor na frente do PATH: instala no VS Code de verdade' {
+    $shim = "$tmp\Programs\cursor\resources\app\codeBin"
+    New-Item -ItemType Directory -Force $shim | Out-Null
+    [IO.File]::WriteAllText("$shim\code.cmd", "@echo %* >> `"%~dp0code.log`"`r`n@exit /b 0`r`n")
+    Remove-Item "$bin\code.log" -ErrorAction SilentlyContinue
+    $comShim = $ambiente.Clone(); $comShim.PATH = "$shim;$($ambiente.PATH)"
+    $r = ComAmbiente $comShim { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
+    Verdade ($r.codigo -eq 0) $r.saida
+    Verdade (-not (Test-Path "$shim\code.log")) "usou o code.cmd do Cursor como se fosse o VS Code: $($r.saida)"
+    Verdade ((Get-Content "$bin\code.log" -Raw) -match '--install-extension') "o VS Code não recebeu a extensão: $($r.saida)"
+}
 Teste 'o hook instalado funciona de verdade, pelo cmd e pelo bash, com acento no caminho' {
     $comando = ((Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks.UserPromptSubmit)[0].hooks[0].command
     # o bash (Git Bash) é o shell que o Claude Code usa no Windows

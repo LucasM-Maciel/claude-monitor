@@ -109,6 +109,17 @@ t_de_novo() {
   [ "$n" = 1 ] || falha "Stop tem $n hooks (duplicou)"
 }
 teste "rodar o instalador de novo não duplica os hooks" t_de_novo
+t_code_do_cursor() {
+  local shim="$TMP/Cursor.app/Contents/Resources/app/bin"
+  mkdir -p "$shim"
+  printf '#!/bin/bash\necho "$@" >> "%s/code.log"\n' "$shim" > "$shim/code"
+  chmod +x "$shim/code"
+  rm -f "$BIN/code.log"
+  env HOME="$CASA" PATH="$shim:$PATH_TESTE" bash "$PACOTE/instalar-mac.sh" --sem-abrir >/dev/null 2>&1 || falha "instalação falhou" || return 1
+  [ ! -f "$shim/code.log" ] || falha "usou o code do Cursor como se fosse o VS Code" || return 1
+  grep -q -- "--install-extension" "$BIN/code.log" 2>/dev/null || falha "o VS Code não recebeu a extensão"
+}
+teste "com o code do Cursor na frente do PATH: instala no VS Code de verdade" t_code_do_cursor
 t_hook() {
   local cmd sh
   cmd=$(node -p "require(process.argv[1]).hooks.UserPromptSubmit[0].hooks[0].command" "$CASA/.claude/settings.json")

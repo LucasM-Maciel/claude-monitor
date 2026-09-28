@@ -24,8 +24,15 @@ passo "Procurando o VS Code / Cursor"
 EDITORES=()
 for par in "code|/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
            "cursor|/Applications/Cursor.app/Contents/Resources/app/bin/cursor"; do
-  exe=$(command -v "${par%%|*}" 2>/dev/null)
+  nome="${par%%|*}"
   fixo="${par#*|}"
+  exe=""
+  while IFS= read -r c; do
+    # o Cursor pode pôr um "code" dele no PATH: esse não é o VS Code
+    if [ "$nome" = code ]; then case "$c $(readlink "$c" 2>/dev/null)" in *[Cc]ursor*) continue ;; esac; fi
+    exe="$c"
+    break
+  done < <(type -ap "$nome" 2>/dev/null)
   [ -z "$exe" ] && [ -x "$fixo" ] && exe="$fixo"
   if [ -n "$exe" ]; then EDITORES+=("$exe"); ok "$exe"; fi
 done
