@@ -204,7 +204,8 @@ minecraft_falso() {
   for som in "$@"; do
     hash=$(printf '%s' "$som" | shasum | cut -c1-40)
     mkdir -p "$MC/assets/objects/${hash:0:2}"
-    ffmpeg -loglevel error -f lavfi -i "sine=frequency=660:duration=0.2" -c:a libvorbis -f ogg "$MC/assets/objects/${hash:0:2}/$hash"
+    # vorbis nativo: o ffmpeg do Homebrew não tem o libvorbis
+    ffmpeg -loglevel error -f lavfi -i "sine=frequency=660:duration=0.2" -c:a vorbis -strict -2 -ac 2 -f ogg "$MC/assets/objects/${hash:0:2}/$hash"
     objetos="$objetos${objetos:+, }\"minecraft/sounds/$som.ogg\": {\"hash\": \"$hash\", \"size\": 1}"
   done
   echo "{\"objects\": {\"icons/icon_16x16.png\": {\"hash\": \"5ff04807c356f1beed0b86ccf659b44b9983e3fa\", \"size\": 781}${objetos:+, }$objetos}}" > "$MC/assets/indexes/17.json"
@@ -227,9 +228,18 @@ if command -v ffmpeg >/dev/null 2>&1; then
     saida=$(env HOME="$CASA" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
     for f in xp1 xp2 xp3 aldeao_hmm1; do [ -f "$MONITOR/sons/$f.wav" ] || falha "falta $f.wav: $saida" || return 1; done
     echo "$saida" | grep -q "aldeao_hmm2 .*não está" || falha "som que falta no índice devia só avisar: $saida" || return 1
-    [ "$MONITOR/ClaudeMonitor" -nt "$MONITOR/overlay.swift" ] || falha "não cutucou a janelinha pra recarregar"
+    [ "$MONITOR/ClaudeMonitor" -nt "$MONITOR/overlay.swift" ] || falha "não cutucou a janelinha pra recarregar" || return 1
+    echo "$saida" | grep -q "Pronto!" || falha "$saida"
   }
   teste "com Minecraft e ffmpeg: gera os .wav (XP em 3 tons) e recarrega a janelinha" t_mc_com_ffmpeg
+  t_mc_sem_sons() {
+    rm -rf "$MC" "$MONITOR/sons"
+    minecraft_falso
+    local saida
+    saida=$(env HOME="$CASA" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
+    echo "$saida" | grep -q "Nenhum som convertido" && ! echo "$saida" | grep -q "Pronto!" || falha "$saida"
+  }
+  teste "com Minecraft e ffmpeg, mas sem nenhum som baixado: não diz \"Pronto!\"" t_mc_sem_sons
 else
   echo "  --  sem ffmpeg nesta máquina: pulei a conversão dos sons"
 fi

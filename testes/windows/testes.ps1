@@ -209,7 +209,8 @@ function MinecraftFalso($appdata, [switch]$ComSons) {
             $hash = -join ((1..40) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
             $pastaObj = "$mc\assets\objects\$($hash.Substring(0, 2))"
             New-Item -ItemType Directory -Force $pastaObj | Out-Null
-            & ffmpeg -loglevel error -f lavfi -i 'sine=frequency=660:duration=0.2' -c:a libvorbis "$pastaObj\$hash.ogg"
+            # vorbis nativo: nem todo ffmpeg tem o libvorbis (o do Homebrew não tem)
+            & ffmpeg -loglevel error -f lavfi -i 'sine=frequency=660:duration=0.2' -c:a vorbis -strict -2 -ac 2 "$pastaObj\$hash.ogg"
             Move-Item "$pastaObj\$hash.ogg" "$pastaObj\$hash"
             $objetos["minecraft/sounds/$som.ogg"] = @{ hash = $hash; size = 1 }
         }
@@ -238,6 +239,14 @@ if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
         foreach ($f in 'xp1', 'xp2', 'xp3', 'aldeao_hmm1') { Verdade (Test-Path "$casa\.claude-monitor\sons\$f.wav") "falta $f.wav: $($r.saida)" }
         Verdade ($r.saida -match 'aldeao_hmm2.*n.o est') "som que falta no índice devia só avisar: $($r.saida)"
         Verdade ((Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-5)) 'não cutucou a janelinha pra recarregar'
+        Verdade ($r.saida -match 'Pronto!') $r.saida
+    }
+    Teste 'com Minecraft e ffmpeg, mas sem nenhum som baixado: não diz "Pronto!"' {
+        $casa = "$tmp\mc3\casa"; New-Item -ItemType Directory -Force $casa | Out-Null
+        MinecraftFalso "$tmp\mc3\appdata"
+        $r = ComAmbiente @{ APPDATA = "$tmp\mc3\appdata"; USERPROFILE = $casa } { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptMc) 120 }
+        Verdade ($r.codigo -eq 0) $r.saida
+        Verdade ($r.saida -match 'Nenhum som convertido' -and $r.saida -notmatch 'Pronto!') $r.saida
     }
 } else { Write-Host '  --  sem ffmpeg nesta máquina: pulei a conversão dos sons' -ForegroundColor Yellow }
 

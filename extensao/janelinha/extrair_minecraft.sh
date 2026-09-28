@@ -43,6 +43,7 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 INDICE=$(ls -t "$MC"/assets/indexes/*.json | head -1)
 mkdir -p "$DESTINO/sons"
+feitos=0
 
 for par in $SONS; do
   nome=${par%%:*}
@@ -60,10 +61,16 @@ for par in $SONS; do
     if [ "$tons" = "1.0" ]; then wav="$DESTINO/sons/$nome.wav"; else wav="$DESTINO/sons/$nome$i.wav"; fi
     # muda o tom mudando a taxa (como o jogo faz) e volta pra 44100 pro .wav
     nova=$(awk -v t="$taxa" -v f="$tom" 'BEGIN { printf "%d", t * f }')
-    ffmpeg -y -loglevel error -i "$ogg" -ac 1 -af "asetrate=$nova,aresample=44100,volume=0.8" -sample_fmt s16 "$wav" \
-      && echo "$(basename "$wav")"
+    if ffmpeg -y -loglevel error -i "$ogg" -ac 1 -af "asetrate=$nova,aresample=44100,volume=0.8" -sample_fmt s16 "$wav"; then
+      basename "$wav"
+      feitos=$((feitos + 1))
+    fi
   done
 done
 # a janelinha aberta vê o binário "mudar" e se reabre já com os sons
 [ -f "$DESTINO/ClaudeMonitor" ] && touch "$DESTINO/ClaudeMonitor"
-echo "Pronto! A janelinha já está com os sons do Minecraft."
+if [ "$feitos" = 0 ]; then
+  echo "Nenhum som convertido (veja os avisos acima). Abra o Minecraft uma vez, pra ele baixar os sons, e rode de novo."
+else
+  echo "Pronto! A janelinha já está com os sons do Minecraft."
+fi

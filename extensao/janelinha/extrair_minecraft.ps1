@@ -53,6 +53,7 @@ $indice = Get-ChildItem "$mc\assets\indexes\*.json" | Sort-Object LastWriteTime 
 $objetos = (Get-Content $indice.FullName -Raw | ConvertFrom-Json).objects
 $saida = Join-Path $destino 'sons'
 New-Item -ItemType Directory -Force $saida | Out-Null
+$feitos = 0
 
 foreach ($nome in $sons.Keys) {
     $hash = $objetos."minecraft/sounds/$($sons[$nome]).ogg".hash
@@ -66,10 +67,14 @@ foreach ($nome in $sons.Keys) {
         # muda o tom mudando a taxa (como o jogo faz) e volta pra 44100 pro .wav
         $filtro = 'asetrate={0},aresample=44100,volume=0.8' -f [int]($taxa * $variantes[$i])
         ffmpeg -y -loglevel error -i $ogg -ac 1 -af $filtro -sample_fmt s16 $wav
-        Write-Host (Split-Path $wav -Leaf)
+        if ($LASTEXITCODE -eq 0) { Write-Host (Split-Path $wav -Leaf); $feitos++ }
     }
 }
 # a janelinha aberta vê o overlay.ps1 "mudar" e se reabre já com os sons
 $overlay = Join-Path $destino 'overlay.ps1'
 if (Test-Path $overlay) { (Get-Item $overlay).LastWriteTimeUtc = [DateTime]::UtcNow }
-Write-Host 'Pronto! A janelinha já está com os sons do Minecraft.'
+if ($feitos -eq 0) {
+    Write-Host 'Nenhum som convertido (veja os avisos acima). Abra o Minecraft uma vez, pra ele baixar os sons, e rode de novo.'
+} else {
+    Write-Host 'Pronto! A janelinha já está com os sons do Minecraft.'
+}
