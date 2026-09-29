@@ -147,24 +147,31 @@ t_cenario() {
   local c=$1 pasta="$TMP/cenario $1 ção" foto="$SAIDA/mac-$1.png"
   node "$RAIZ/testes/cenarios.js" "$pasta" "$c" $$ >/dev/null || falha "cenarios.js falhou" || return 1
   if [ "$c" = andando ]; then cp "$TMP/magenta.png" "$pasta/picareta.png"; fi
+  if [ "$c" = pedra ]; then cp "$TMP/magenta.png" "$pasta/diamante.png"; fi  # o diamante que sobe
   rm -f "$foto" "$foto.txt"
   local extra=()
   [ -f "$pasta/uso.json" ] && extra=(--uso "$pasta/uso.json")
   [ -f "$pasta/clicar.txt" ] && extra+=(--clicar "$(cat "$pasta/clicar.txt")")
+  [ -f "$pasta/cena.txt" ] && extra+=(--cena "$(cat "$pasta/cena.txt")")
   com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$foto" --pasta "$pasta" "${extra[@]}" \
     || falha "a janelinha não terminou direito" || return 1
   diff <(cat "$pasta/esperado.txt") <(cat "$foto.txt") || falha "o que a janelinha mostrou é diferente do esperado (acima)" || return 1
   [ "$(pixels "$foto" 24 24 24 10)" -gt 5000 ] || falha "cadê o cartão escuro?" || return 1
   [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)?" || return 1
   if [ "$c" = andando ]; then
-    [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)"
+    [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
+  elif [ "$c" = pedra ]; then
+    [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   else
-    [ "$(pixels "$foto" 74 237 217 40)" -gt 5 ] || falha "cadê a picareta desenhada (ciano)?"
+    [ "$(pixels "$foto" 74 237 217 40)" -gt 5 ] || falha "cadê a ferramenta desenhada (ciano)?" || return 1
+  fi
+  if [ "$c" = bug ]; then
+    [ "$(pixels "$foto" 239 68 68 30)" -gt 20 ] || falha "o bug não ficou vermelho com a espadada"
   fi
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 t_cores() {

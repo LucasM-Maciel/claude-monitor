@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tira do Minecraft Java instalado o que a janelinha usa e grava em ~/.claude-monitor:
-#  - picareta.png (textura da picareta de diamante, da versão mais nova instalada)
+#  - picareta.png, espada.png, diamante.png, pedra.png (texturas de diamante da
+#    versão mais nova instalada: a pedra é o minério de diamante)
 #  - sons/*.wav   (dos assets; precisa do ffmpeg: brew install ffmpeg)
 # Sem Minecraft, a janelinha usa os sons do Mac e uma picareta desenhada.
 # Os arquivos não vão junto no pacote porque são da Mojang: cada um tira do seu jogo.
@@ -20,20 +21,24 @@ if [ ! -d "$MC/assets/indexes" ]; then
 fi
 mkdir -p "$DESTINO"
 
-# picareta: textures/item (1.13+) ou textures/items (antigas), do jar mais novo
-# cujo nome bate com a pasta da versão (as outras são de mods/instaladores)
+# texturas: textures/item e block (1.13+) ou items e blocks (antigas), do jar mais
+# novo cujo nome bate com a pasta da versão (as outras são de mods/instaladores)
+TEXTURAS="picareta:item/diamond_pickaxe espada:item/diamond_sword diamante:item/diamond pedra:block/diamond_ore"
 JAR=$(ls -t "$MC"/versions/*/*.jar 2>/dev/null | while IFS= read -r j; do
   if [ "$(basename "$j" .jar)" = "$(basename "$(dirname "$j")")" ]; then echo "$j"; break; fi
 done)
 if [ -n "$JAR" ]; then
-  for dentro in assets/minecraft/textures/item/diamond_pickaxe.png assets/minecraft/textures/items/diamond_pickaxe.png; do
-    if unzip -p "$JAR" "$dentro" > "$DESTINO/picareta.png.novo" 2>/dev/null && [ -s "$DESTINO/picareta.png.novo" ]; then
-      mv "$DESTINO/picareta.png.novo" "$DESTINO/picareta.png"
-      echo "picareta.png (de $(basename "$JAR"))"
-      break
-    fi
+  for par in $TEXTURAS; do
+    nome=${par%%:*} caminho=${par#*:}
+    for dentro in "assets/minecraft/textures/$caminho.png" "assets/minecraft/textures/${caminho%%/*}s/${caminho#*/}.png"; do
+      if unzip -p "$JAR" "$dentro" > "$DESTINO/$nome.png.novo" 2>/dev/null && [ -s "$DESTINO/$nome.png.novo" ]; then
+        mv "$DESTINO/$nome.png.novo" "$DESTINO/$nome.png"
+        echo "$nome.png (de $(basename "$JAR"))"
+        break
+      fi
+    done
+    rm -f "$DESTINO/$nome.png.novo"
   done
-  rm -f "$DESTINO/picareta.png.novo"
 fi
 
 if ! command -v ffmpeg >/dev/null 2>&1; then

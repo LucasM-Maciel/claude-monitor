@@ -14,7 +14,8 @@
 // Teste: ClaudeMonitor --foto arquivo.png desenha, salva o PNG (e, ao lado, um
 // .txt com o que viu) e sai. Sem internet: o usage vem de --uso arquivo.json, se
 // passar. --pasta troca a ~/.claude-monitor por outra. --clicar id clica na linha
-// dessa sessão (o .txt diz o link que abriria).
+// dessa sessão (o .txt diz o link que abriria). --cena "pedra 2.1" fotografa esse
+// instante da cena (pedra ou bug), em segundos.
 import Cocoa
 
 let ambiente = ProcessInfo.processInfo.environment
@@ -474,27 +475,100 @@ let sprite = [
 ]
 let pw: CGFloat = 1.5, ph: CGFloat = 3
 
-// Picareta sem Minecraft: 16x16 desenhada aqui, com o cabo no mesmo pixel da
-// textura do jogo. d/c/b = cabeça (contorno, diamante, brilho); k/h = cabo.
-let picaretaPropria = [
-    "................",
-    "....ddddd.......",
-    "...dbbcccdd.....",
-    "....dddcccbd....",
-    ".......ddcccd...",
-    ".........dccd...",
-    "........kdcbcd..",
-    ".......khkdccd..",
-    "......khk..dcd..",
-    ".....khk...dcd..",
-    "....khk.....dd..",
-    "...khk..........",
-    "..khk...........",
-    "..kk............",
-    "................",
-    "................",
+// Sem Minecraft: 16x16 desenhados aqui, com o cabo no mesmo pixel das texturas
+// do jogo. d/c/b = diamante (contorno, cor, brilho); k/h = cabo; s/e/l = pedra
+// (cor, escuro, claro). O bug é sempre daqui (o Minecraft não tem um que sirva).
+let cores16: [(Character, String)] = [("d", "#1B6E73"), ("c", "#4AEDD9"), ("b", "#C9FFF6"), ("k", "#3B2A14"),
+                                      ("h", "#8A5A2B"), ("s", "#7D7D7D"), ("e", "#5E5E5E"), ("l", "#A0A0A0")]
+let desenhos: [String: [String]] = [
+    "picareta": [
+        "................",
+        "....ddddd.......",
+        "...dbbcccdd.....",
+        "....dddcccbd....",
+        ".......ddcccd...",
+        ".........dccd...",
+        "........kdcbcd..",
+        ".......khkdccd..",
+        "......khk..dcd..",
+        ".....khk...dcd..",
+        "....khk.....dd..",
+        "...khk..........",
+        "..khk...........",
+        "..kk............",
+        "................",
+        "................",
+    ],
+    "espada": [
+        "................",
+        "............ddd.",
+        "...........dbcd.",
+        "..........dbcd..",
+        ".........dbcd...",
+        "........dbcd....",
+        ".......dbcd.....",
+        "......dbcd......",
+        "..dd.dbcd.......",
+        "..dcdbcd........",
+        "...dccd.........",
+        "...kdcdd........",
+        "..khkddcd.......",
+        ".khk...dd.......",
+        ".kk.............",
+        "................",
+    ],
+    "diamante": [
+        "................",
+        "................",
+        "....dddddddd....",
+        "...dbbcccccbd...",
+        "..dbbccccccccd..",
+        "..dccccccccccd..",
+        "...dcccccccbd...",
+        "....dccccccd....",
+        ".....dccccd.....",
+        "......dccd......",
+        ".......dd.......",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+    ],
+    "pedra": [
+        "ssslssssesssslss",
+        "sesssssssslsssse",
+        "sssbcssesssssbcs",
+        "lsdccdsssssesdcd",
+        "ssssdsslssssssds",
+        "sesssssssbcsssss",
+        "ssslsssesdccdsls",
+        "ssssssssssdsssss",
+        "sbcsslssssssesss",
+        "dccdsssssslssbcs",
+        "sdsssesssssssdcc",
+        "ssssssssbcssssds",
+        "slssssesdccdslss",
+        "sssesssssdssssss",
+        "ssssslsssssssess",
+        "esssssssslssssss",
+    ],
 ]
-let coresPicareta: [(Character, String)] = [("d", "#1B6E73"), ("c", "#4AEDD9"), ("b", "#C9FFF6"), ("k", "#3B2A14"), ("h", "#8A5A2B")]
+// de lado, olhando pra esquerda (pro Clawd); p/q = as pernas, que se alternam
+let bugLinhas = [
+    "a............",
+    ".a...vvvvv...",
+    "..a.vwwvvvvv.",
+    ".aaavwvvxvvvv",
+    "aoaavvvvvxvvv",
+    ".aaaavvvvvxv.",
+    "..pq..pq..pq.",
+    ".p..qp..qp..q",
+]
+let coresBug: [(Character, String)] = [("v", "#65A30D"), ("w", "#A3E635"), ("x", "#365314"), ("a", "#111827"),
+                                       ("o", "#F8FAFC"), ("p", "#111827"), ("q", "#111827")]
+let coresBugVermelho: [(Character, String)] = [("v", "#EF4444"), ("w", "#FCA5A5"), ("x", "#991B1B"), ("a", "#450A0A"),
+                                               ("o", "#FEE2E2"), ("p", "#450A0A"), ("q", "#450A0A")]  // levou o golpe
 
 // retângulos de mesma cor num caminho só: pixels vizinhos sem risco entre eles
 func forma(_ linhas: [String], _ largura: CGFloat, _ altura: CGFloat, _ dx: CGFloat, _ dy: CGFloat,
@@ -518,12 +592,105 @@ let corpo = forma(sprite, pw, ph, -9, -5) { $0 == "#" || $0 == "o" }
 let olhos = forma(sprite, pw, ph, -9, -5) { $0 == "o" }
 let pernaA = forma(sprite, pw, ph, -9, -5) { $0 == "A" }
 let pernaB = forma(sprite, pw, ph, -9, -5) { $0 == "B" }
-let desenhoPicareta: [(CGPath, NSColor)] = coresPicareta.map { par -> (CGPath, NSColor) in
-    (forma(picaretaPropria, 1.1, 1.1, 0, 0, { $0 == par.0 }), hex(par.1))
+// desenho em 1 px por pixel; quem pinta escala
+typealias Desenho = [(CGPath, NSColor)]
+func desenho(_ linhas: [String], _ cores: [(Character, String)]) -> Desenho {
+    cores.map { par -> (CGPath, NSColor) in (forma(linhas, 1, 1, 0, 0, { $0 == par.0 }), hex(par.1)) }
 }
-let texturaPicareta = NSImage(contentsOfFile: pasta + "/picareta.png")
+let desenhosProntos = desenhos.mapValues { desenho($0, cores16) }
+func bug(_ perna: Character, _ cores: [(Character, String)]) -> Desenho {
+    let outra: Character = perna == "p" ? "q" : "p"
+    return desenho(bugLinhas.map { String($0.map { $0 == outra ? "." : $0 }) }, cores)
+}
+let bugs: [String: Desenho] = ["p": bug("p", coresBug), "q": bug("q", coresBug),
+                               "p!": bug("p", coresBugVermelho), "q!": bug("q", coresBugVermelho)]
+// textura do Minecraft (extrair_minecraft.sh), se tiver; senão, o desenho daqui
+var texturas: [String: NSImage] = [:]
+for nome in desenhos.keys { texturas[nome] = NSImage(contentsOfFile: pasta + "/\(nome).png") }
+func pintar(_ ctx: CGContext, _ d: Desenho, _ r: CGRect, _ grade: CGSize) {
+    ctx.saveGState()
+    ctx.translateBy(x: r.minX, y: r.minY)
+    ctx.scaleBy(x: r.width / grade.width, y: r.height / grade.height)
+    ctx.setShouldAntialias(false)
+    for (caminho, cor) in d {
+        ctx.addPath(caminho)
+        ctx.setFillColor(cor.cgColor)
+        ctx.fillPath()
+    }
+    ctx.restoreGState()
+}
+func pintar(_ ctx: CGContext, _ nome: String, _ r: CGRect) {
+    if let img = texturas[nome] {
+        NSGraphicsContext.current?.imageInterpolation = .none
+        img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    } else if let d = desenhosProntos[nome] {
+        pintar(ctx, d, r, CGSize(width: 16, height: 16))
+    }
+}
 let cabo = CGPoint(x: 2.75, y: 14.85)  // pixel (2,5; 13,5) da textura, em 1,1 por pixel
 let mao = CGPoint(x: 12, y: -7.5)       // ponta do braço direito do Clawd
+
+// --- Cenas: de vez em quando, andando, ele para e luta (igual ao overlay.ps1) ---
+// picareta: aparece uma pedra de diamante na frente, ele bate 3x, ela vira farelo
+// e sobe um diamante. espada: chega um bug, 3 espadadas, o bug vira fumaça. A
+// ferramenta é sorteada cada vez que ele começa a andar. Tudo no referencial de
+// quem anda (x+ = pra frente, y- = pra fora do cartão), em função do tempo, então
+// o --foto fotografa qualquer instante (--cena "pedra 2.1").
+// em segundos: o alvo chega, leva 3 golpes (o 3º mata) e a cena acaba em "fim"
+let roteiros: [String: (chega: CGFloat, golpe: CGFloat, fim: CGFloat)] = ["pedra": (0.3, 0.5, 3.2), "bug": (1.0, 0.45, 2.9)]
+let voos: [(CGFloat, CGFloat)] = [(-30, -60), (-12, -80), (10, -75), (28, -55), (-22, -30), (20, -35), (0, -90), (34, -20)]  // px/s
+let coresFarelo = ["pedra": ["#7D7D7D", "#4AEDD9", "#A0A0A0", "#5E5E5E"], "bug": ["#E5E7EB", "#9CA3AF"]]
+// ângulo da ferramenta num golpe (u de 0 a 1): levanta devagar, desce rápido
+func golpe(_ u: CGFloat) -> CGFloat { u < 0.7 ? -40 * u / 0.7 : -40 + 110 * (u - 0.7) / 0.3 }
+// no instante t da cena: ângulo da ferramenta, s desde o último golpe e s desde que o alvo morreu
+func momento(_ tipo: String, _ t: CGFloat) -> (angulo: CGFloat, acerto: CGFloat, morto: CGFloat) {
+    let r = roteiros[tipo]!
+    let morre = r.chega + 3 * r.golpe
+    let g = (t - r.chega) / r.golpe
+    return (g >= 0 && g < 3 ? golpe(g.truncatingRemainder(dividingBy: 1)) : 0,
+            g >= 1 && t < morre ? g.truncatingRemainder(dividingBy: 1) * r.golpe : 99, t - morre)
+}
+// a pedra (brota do chão, treme no golpe) ou o bug (chega andando, recua e fica vermelho no golpe)
+func pintarAlvo(_ ctx: CGContext, _ tipo: String, _ t: CGFloat) {
+    let (_, acerto, morto) = momento(tipo, t)
+    guard morto < 0 else { return }
+    let r = roteiros[tipo]!
+    if tipo == "pedra" {
+        let s = min(1, t / r.chega)
+        pintar(ctx, "pedra", CGRect(x: 16 + (acerto < 0.1 ? 1 : 0), y: -12 * s, width: 12, height: 12 * s))
+    } else {
+        let x = t < r.chega ? 42 - 25 * t / r.chega : 17 + (acerto < 0.15 ? 2 : 0)
+        let perna = Int(floor(t / 0.1)) % 2 == 1 ? "q" : "p"
+        pintar(ctx, bugs[perna + (acerto < 0.15 ? "!" : "")]!, CGRect(x: x, y: -12.8, width: 13 * 1.6, height: 8 * 1.6),
+               CGSize(width: 13, height: 8))
+    }
+}
+// farelos da pedra (caem) ou fumaça do bug (nasce em roda, sobe e cresce), por 0,6 s; e o diamante sobe e some
+func pintarRestos(_ ctx: CGContext, _ tipo: String, _ t: CGFloat) {
+    let d = momento(tipo, t).morto
+    guard d >= 0 else { return }
+    if d < 0.6 {
+        let cores = coresFarelo[tipo]!
+        for (i, v) in voos.enumerated() {
+            let q: CGRect
+            if tipo == "pedra" {
+                q = CGRect(x: 22 + v.0 * d, y: -6 + v.1 * d + 150 * d * d, width: 2, height: 2)
+            } else {
+                let l = 3 + 5 * d
+                q = CGRect(x: 27.4 + v.0 * (0.06 + d * 0.3) - l / 2, y: -6.4 + v.1 * (0.06 + d * 0.2) - 10 * d - l / 2, width: l, height: l)
+            }
+            ctx.setFillColor(hex(cores[i % cores.count]).withAlphaComponent(1 - d / 0.6).cgColor)
+            ctx.fill(q)
+        }
+    }
+    if tipo == "pedra" {
+        let s = min(1, d / 0.6)
+        ctx.saveGState()
+        ctx.setAlpha(d < 1 ? 1 : max(0, 1 - (d - 1) / 0.4))
+        pintar(ctx, "diamante", CGRect(x: 16.5, y: -11.5 - 16 * (1 - (1 - s) * (1 - s)) + sin(d * 7) * 0.8, width: 11, height: 11))
+        ctx.restoreGState()
+    }
+}
 
 // Trilha = borda arredondada do cartão, no sentido horário; o Clawd gira junto
 // nas curvas. Fora do modo "andando" ele fica parado no meio da borda de cima.
@@ -532,17 +699,37 @@ final class Palco: NSView {
     var modo = ""
     var fracao: CGFloat = 0  // onde ele está na volta (0-1); sobrevive ao cartão mudar de tamanho
     var antes = ProcessInfo.processInfo.systemUptime
+    var ferramenta = "picareta"
+    var luta: String?  // "pedra" ou "bug" enquanto luta, parado
+    var lutaDesde: TimeInterval = 0
+    var proxima: TimeInterval = .infinity
+    var instante: CGFloat?  // --foto --cena: o instante fixo da cena
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    // "andando" (algo rodando): anda, pula, troca de perna e minera.
+    // "andando" (algo rodando): anda, pula, troca de perna e minera (e às vezes luta).
     // "pulando" (pergunta/permissão): parado em cima do cartão, pulando.
     // "parado" (nada rodando): parado em cima do cartão, com as 4 pernas no chão.
     func mudar(_ novo: String) {
         if novo == modo { return }
-        if novo == "andando", let c = cartao?.frame { fracao = (c.width / 2 - 8) / perimetro(c) }  // sai do meio de cima
+        luta = nil  // mudou no meio da luta
+        if novo == "andando" {
+            if let c = cartao?.frame { fracao = (c.width / 2 - 8) / perimetro(c) }  // sai do meio de cima
+            if arquivoFoto == nil {  // a foto fica sempre na picareta
+                ferramenta = Bool.random() ? "picareta" : "espada"
+                proxima = ProcessInfo.processInfo.systemUptime + .random(in: 20...45)
+            }
+        }
         modo = novo
         needsDisplay = true
+    }
+    // --cena "pedra 2.1": aquele instante da cena (só no --foto)
+    func fotografar(_ cena: String) {
+        let partes = cena.split(separator: " ")
+        guard partes.count == 2, let t = Double(partes[1]) else { return }
+        luta = String(partes[0])
+        ferramenta = luta == "bug" ? "espada" : "picareta"
+        instante = CGFloat(t)
     }
 
     func perimetro(_ c: NSRect) -> CGFloat { 2 * (c.width + c.height) - (8 - 2 * .pi) * 8 }
@@ -579,9 +766,19 @@ final class Palco: NSView {
         let dt = CGFloat(min(agora - antes, 0.1))
         antes = agora
         guard modo != "parado", let c = cartao?.frame, c.width > 0 else { return }
-        if modo == "andando" {
-            fracao += 50 * dt / perimetro(c)  // ~50 px/s
-            fracao -= fracao.rounded(.down)
+        if modo == "andando" && instante == nil {
+            if let tipo = luta {
+                if CGFloat(agora - lutaDesde) >= roteiros[tipo]!.fim {  // acabou: volta a andar de onde parou
+                    luta = nil
+                    proxima = agora + .random(in: 20...45)
+                }
+            } else if agora >= proxima {
+                luta = ferramenta == "espada" ? "bug" : "pedra"
+                lutaDesde = agora
+            } else {
+                fracao += 50 * dt / perimetro(c)  // ~50 px/s
+                fracao -= fracao.rounded(.down)
+            }
         }
         needsDisplay = true
     }
@@ -594,7 +791,11 @@ final class Palco: NSView {
         ctx.saveGState()
         ctx.translateBy(x: ponto.x, y: ponto.y)
         ctx.rotate(by: angulo)
-        if modo != "parado" {
+        // lutando: parado, sem pulo, as 4 pernas no chão e a ferramenta golpeando
+        let cena = luta.map { ($0, instante ?? CGFloat(t - lutaDesde)) }
+        if let c = cena { pintarAlvo(ctx, c.0, c.1) }  // atrás da ferramenta, que bate por cima
+        ctx.saveGState()
+        if modo != "parado" && cena == nil {
             // pulinhos: sobe rápido e desacelera no alto; a volta acelera
             let u = t.truncatingRemainder(dividingBy: 0.32) / 0.16
             let p = CGFloat(u <= 1 ? u : 2 - u)
@@ -605,33 +806,27 @@ final class Palco: NSView {
             ctx.setFillColor(cor.cgColor)
             ctx.fillPath()
         }
-        // andando troca de perna a cada meio pulo; parado, as 4 no chão
+        // andando troca de perna a cada meio pulo; parado ou lutando, as 4 no chão
         let passo = Int(t / 0.16) % 2 == 0
+        let anda = modo == "andando" && cena == nil
         ctx.setFillColor(hex("#D77757").cgColor)
-        if modo != "andando" || passo { ctx.addPath(pernaA) }
-        if modo != "andando" || !passo { ctx.addPath(pernaB) }
+        if !anda || passo { ctx.addPath(pernaA) }
+        if !anda || !passo { ctx.addPath(pernaB) }
         ctx.fillPath()
 
-        // picareta na mão direita; andando, balança como quem minera
+        // ferramenta na mão direita; andando, balança como quem minera
         ctx.translateBy(x: mao.x, y: mao.y)
-        if modo == "andando" {
+        if let c = cena {
+            ctx.rotate(by: momento(c.0, c.1).angulo * .pi / 180)
+        } else if anda {
             let u = t.truncatingRemainder(dividingBy: 0.64) / 0.32
             let p = u <= 1 ? u : 2 - u
             ctx.rotate(by: CGFloat(-25 + 40 * sin(p * .pi / 2)) * .pi / 180)
         }
         ctx.translateBy(x: -cabo.x, y: -cabo.y)
-        if let img = texturaPicareta {
-            NSGraphicsContext.current?.imageInterpolation = .none
-            img.draw(in: NSRect(x: 0, y: 0, width: 17.6, height: 17.6), from: .zero, operation: .sourceOver,
-                     fraction: 1, respectFlipped: true, hints: nil)
-        } else {
-            ctx.setShouldAntialias(false)
-            for (caminho, cor) in desenhoPicareta {
-                ctx.addPath(caminho)
-                ctx.setFillColor(cor.cgColor)
-                ctx.fillPath()
-            }
-        }
+        pintar(ctx, ferramenta, CGRect(x: 0, y: 0, width: 17.6, height: 17.6))
+        ctx.restoreGState()
+        if let c = cena { pintarRestos(ctx, c.0, c.1) }
         ctx.restoreGState()
     }
 }
@@ -690,7 +885,7 @@ func atualizar() {
             abrirSessao(id)
         }
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
-            + ["clawd: \(palco.modo)", "usage: \(uso == nil ? "indisponivel" : "ok")",
+            + ["clawd: \(palco.modo)\(palco.luta.map { " (\($0))" } ?? "")", "usage: \(uso == nil ? "indisponivel" : "ok")",
                "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
@@ -709,6 +904,7 @@ repetir(1.0 / 30) { palco.tique() }
 
 if let foto = arquivoFoto {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        if let cena = argumento("--cena") { palco.fotografar(cena) }
         atualizar()
         if let rep = raiz.bitmapImageRepForCachingDisplay(in: raiz.bounds) {
             raiz.cacheDisplay(in: raiz.bounds, to: rep)

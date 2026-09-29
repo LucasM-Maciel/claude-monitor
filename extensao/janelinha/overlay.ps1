@@ -13,8 +13,9 @@
 # extensão atualiza este arquivo, a janelinha se reabre sozinha com a versão nova.
 # Teste: -Foto arquivo.png desenha, salva e sai (sem internet: o usage vem de -ArquivoUso
 # arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra; -Clicar id
-# clica na linha dessa sessão (o .txt diz o link que abriria).
-param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar)
+# clica na linha dessa sessão (o .txt diz o link que abriria); -Cena "pedra 2.1"
+# fotografa esse instante da cena (pedra ou bug), em segundos.
+param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar, [string]$Cena)
 Add-Type -AssemblyName PresentationFramework
 if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
 # quem me abre de dentro do VS Code me passa ELECTRON_RUN_AS_NODE=1; com ele, o Code.exe
@@ -266,7 +267,9 @@ function Avisar($sessoes) {
         $script:somDaVez = $tocar
         if ($Foto) { return }
         $tocador.SoundLocation = $sons[$tocar] | Get-Random
-        $tocador.Play()
+        # no diário: amigo sem som manda o janelinha.log e dá pra ver se ela tentou tocar
+        try { $tocador.Play(); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $tocador.SoundLocation -Leaf))" }
+        catch { Anotar "não toquei $($tocador.SoundLocation): $($_.Exception.Message)" }
     }
 }
 
@@ -322,6 +325,9 @@ function Atualizar {
     $situacoes = @($sessoes | ForEach-Object { $_.situacao })
     Clawd $(if ($situacoes -contains 'question' -or $situacoes -contains 'permission') { 'pulando' }
             elseif ($situacoes -contains 'working') { 'andando' } else { 'parado' })
+    if ($passeio.modo -eq 'andando' -and -not $luta.tipo -and -not $Foto -and [DateTime]::Now -ge $luta.proxima) {
+        ComecarCena $(if ($luta.ferramenta -eq 'espada') { 'bug' } else { 'pedra' })
+    }
 
     if ([DateTime]::Now -ge $uso.proxima) {
         $uso.proxima = [DateTime]::Now.AddSeconds(20)  # se falhar, tenta de novo logo
@@ -391,80 +397,153 @@ $pernaA = Forma 'A+' '#D77757'
 $pernaB = Forma 'B+' '#D77757'
 $pernaB.Visibility = 'Hidden'
 
-# Picareta sem Minecraft: 16x16 desenhada aqui, com o cabo no mesmo pixel da
-# textura do jogo. d/c/b = cabeça (contorno, diamante, brilho); k/h = cabo.
-$picaretaPropria = @(
-    '................',
-    '....ddddd.......',
-    '...dbbcccdd.....',
-    '....dddcccbd....',
-    '.......ddcccd...',
-    '.........dccd...',
-    '........kdcbcd..',
-    '.......khkdccd..',
-    '......khk..dcd..',
-    '.....khk...dcd..',
-    '....khk.....dd..',
-    '...khk..........',
-    '..khk...........',
-    '..kk............',
-    '................',
-    '................'
-)
-$coresPicareta = [ordered]@{ d = '#1B6E73'; c = '#4AEDD9'; b = '#C9FFF6'; k = '#3B2A14'; h = '#8A5A2B' }
-function DesenhoPicareta {
+# Sem Minecraft: 16x16 desenhados aqui, com o cabo no mesmo pixel das texturas
+# do jogo. d/c/b = diamante (contorno, cor, brilho); k/h = cabo; s/e/l = pedra
+# (cor, escuro, claro). O bug é sempre daqui (o Minecraft não tem um que sirva).
+$cores16 = [ordered]@{ d = '#1B6E73'; c = '#4AEDD9'; b = '#C9FFF6'; k = '#3B2A14'; h = '#8A5A2B'; s = '#7D7D7D'; e = '#5E5E5E'; l = '#A0A0A0' }
+$desenhos = @{
+    picareta = @(
+        '................',
+        '....ddddd.......',
+        '...dbbcccdd.....',
+        '....dddcccbd....',
+        '.......ddcccd...',
+        '.........dccd...',
+        '........kdcbcd..',
+        '.......khkdccd..',
+        '......khk..dcd..',
+        '.....khk...dcd..',
+        '....khk.....dd..',
+        '...khk..........',
+        '..khk...........',
+        '..kk............',
+        '................',
+        '................')
+    espada = @(
+        '................',
+        '............ddd.',
+        '...........dbcd.',
+        '..........dbcd..',
+        '.........dbcd...',
+        '........dbcd....',
+        '.......dbcd.....',
+        '......dbcd......',
+        '..dd.dbcd.......',
+        '..dcdbcd........',
+        '...dccd.........',
+        '...kdcdd........',
+        '..khkddcd.......',
+        '.khk...dd.......',
+        '.kk.............',
+        '................')
+    diamante = @(
+        '................',
+        '................',
+        '....dddddddd....',
+        '...dbbcccccbd...',
+        '..dbbccccccccd..',
+        '..dccccccccccd..',
+        '...dcccccccbd...',
+        '....dccccccd....',
+        '.....dccccd.....',
+        '......dccd......',
+        '.......dd.......',
+        '................',
+        '................',
+        '................',
+        '................',
+        '................')
+    pedra = @(
+        'ssslssssesssslss',
+        'sesssssssslsssse',
+        'sssbcssesssssbcs',
+        'lsdccdsssssesdcd',
+        'ssssdsslssssssds',
+        'sesssssssbcsssss',
+        'ssslsssesdccdsls',
+        'ssssssssssdsssss',
+        'sbcsslssssssesss',
+        'dccdsssssslssbcs',
+        'sdsssesssssssdcc',
+        'ssssssssbcssssds',
+        'slssssesdccdslss',
+        'sssesssssdssssss',
+        'ssssslsssssssess',
+        'esssssssslssssss')
+    # de lado, olhando pra esquerda (pro Clawd); p/q = as pernas, que se alternam
+    bug = @(
+        'a............',
+        '.a...vvvvv...',
+        '..a.vwwvvvvv.',
+        '.aaavwvvxvvvv',
+        'aoaavvvvvxvvv',
+        '.aaaavvvvvxv.',
+        '..pq..pq..pq.',
+        '.p..qp..qp..q')
+}
+$coresBug = [ordered]@{ v = '#65A30D'; w = '#A3E635'; x = '#365314'; a = '#111827'; o = '#F8FAFC'; p = '#111827'; q = '#111827' }
+$coresBugVermelho = [ordered]@{ v = '#EF4444'; w = '#FCA5A5'; x = '#991B1B'; a = '#450A0A'; o = '#FEE2E2'; p = '#450A0A'; q = '#450A0A' }  # levou o golpe
+function Desenho($linhas, $cores) {
     $grupo = New-Object Windows.Media.DrawingGroup
-    # retângulo invisível 16x16: sem ele a imagem encolhe pro tamanho do desenho
+    # retângulo invisível do tamanho todo: sem ele a imagem encolhe pro tamanho do desenho
     [void]$grupo.Children.Add([Windows.Media.GeometryDrawing]::new([Windows.Media.Brushes]::Transparent, $null,
-        [Windows.Media.RectangleGeometry]::new([Windows.Rect]::new(0, 0, 16, 16))))
-    foreach ($c in $coresPicareta.Keys) {
+        [Windows.Media.RectangleGeometry]::new([Windows.Rect]::new(0, 0, $linhas[0].Length, $linhas.Count))))
+    foreach ($c in $cores.Keys) {
         $g = New-Object Windows.Media.GeometryGroup
-        for ($y = 0; $y -lt 16; $y++) {
-            for ($x = 0; $x -lt 16; $x++) {
-                if ($picaretaPropria[$y][$x] -ceq $c) { [void]$g.Children.Add([Windows.Media.RectangleGeometry]::new([Windows.Rect]::new($x, $y, 1, 1))) }
+        for ($y = 0; $y -lt $linhas.Count; $y++) {
+            for ($x = 0; $x -lt $linhas[$y].Length; $x++) {
+                if ($linhas[$y][$x] -ceq $c) { [void]$g.Children.Add([Windows.Media.RectangleGeometry]::new([Windows.Rect]::new($x, $y, 1, 1))) }
             }
         }
-        [void]$grupo.Children.Add([Windows.Media.GeometryDrawing]::new((Cor $coresPicareta[$c]), $null, $g))
+        [void]$grupo.Children.Add([Windows.Media.GeometryDrawing]::new((Cor $cores[$c]), $null, $g))
     }
     [Windows.Media.DrawingImage]::new($grupo)
 }
-
-# picareta de diamante (textura do Minecraft, se tiver) na mão direita, balançando
-# como quem minera; o cabo (canto de baixo à esquerda da textura) fica na mão
-$arquivoPicareta = "$Pasta\picareta.png"
-$picareta = New-Object Windows.Controls.Image
-if (Test-Path $arquivoPicareta) {
+# textura do Minecraft (extrair_minecraft.ps1), se tiver; senão, o desenho daqui
+function Textura($nome) {
+    $arquivo = "$Pasta\$nome.png"
+    if (-not (Test-Path $arquivo)) { return Desenho $desenhos[$nome] $cores16 }
     $textura = New-Object Windows.Media.Imaging.BitmapImage
     $textura.BeginInit()
-    $textura.UriSource = [Uri]$arquivoPicareta
+    $textura.UriSource = [Uri]$arquivo
     $textura.CacheOption = 'OnLoad'
     $textura.EndInit()
-    $picareta.Source = $textura
-} else {
-    $picareta.Source = DesenhoPicareta
-    [Windows.Media.RenderOptions]::SetEdgeMode($picareta, 'Aliased')
+    $textura
 }
-$picareta.Width = 17.6; $picareta.Height = 17.6  # 1,1 por pixel da textura 16x16
-[Windows.Media.RenderOptions]::SetBitmapScalingMode($picareta, 'NearestNeighbor')
+function Imagem($fonte, $lado, $altura) {
+    $i = New-Object Windows.Controls.Image
+    $i.Source = $fonte
+    $i.Width = $lado; $i.Height = $(if ($altura) { $altura } else { $lado })
+    [Windows.Media.RenderOptions]::SetEdgeMode($i, 'Aliased')
+    [Windows.Media.RenderOptions]::SetBitmapScalingMode($i, 'NearestNeighbor')
+    $i
+}
+$texturas = @{}
+foreach ($n in 'picareta', 'espada', 'diamante', 'pedra') { $texturas[$n] = Textura $n }
+
+# a ferramenta (picareta ou espada) na mão direita, balançando como quem minera;
+# o cabo (canto de baixo à esquerda da textura) fica na mão
+$ferramenta = Imagem $texturas.picareta 17.6  # 1,1 por pixel da textura 16x16
 $cabo = [Windows.Point]::new(2.75, 14.85)  # pixel (2,5; 13,5) da textura
 $mao = [Windows.Point]::new(12, -7.5)      # ponta do braço direito do Clawd
-[Windows.Controls.Canvas]::SetLeft($picareta, $mao.X - $cabo.X)
-[Windows.Controls.Canvas]::SetTop($picareta, $mao.Y - $cabo.Y)
+[Windows.Controls.Canvas]::SetLeft($ferramenta, $mao.X - $cabo.X)
+[Windows.Controls.Canvas]::SetTop($ferramenta, $mao.Y - $cabo.Y)
 $giro = [Windows.Media.RotateTransform]::new(0, $cabo.X, $cabo.Y)
-$picareta.RenderTransform = $giro
+$ferramenta.RenderTransform = $giro
 $balanco = [Windows.Media.Animation.DoubleAnimation]::new(-25, 15, [Windows.Duration]::new([TimeSpan]::FromMilliseconds(320)))
 $balanco.AutoReverse = $true
 $balanco.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
 $balanco.EasingFunction = New-Object Windows.Media.Animation.SineEase
 [Windows.Media.Animation.Timeline]::SetDesiredFrameRate($balanco, 40)
 $giro.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $balanco)
-[void]$pulo.Children.Add($picareta)
+[void]$pulo.Children.Add($ferramenta)
 
 # Trilha = borda arredondada do cartão, no sentido horário; o Clawd gira junto
 # nas curvas. Refeita quando o cartão muda de tamanho, sem perder o lugar dele.
 # Fora do modo 'andando' ele fica parado no meio da borda de cima.
 $passeio = @{ relogio = [Diagnostics.Stopwatch]::StartNew(); duracao = 0; inicio = 0; modo = $null }
 function Trilha {
+    if ($luta.tipo) { return }  # parado lutando; o fim da cena refaz a trilha
     $w = $cartao.ActualWidth; $h = $cartao.ActualHeight
     if (-not $w) { return }
     $o = $cartao.TranslatePoint([Windows.Point]::new(0, 0), $mascote.Parent)
@@ -505,12 +584,131 @@ $passo.Add_Tick({
     $pernaB.Visibility = $v
 })
 
-# 'andando' (algo rodando): anda, pula, troca de perna e minera.
+# --- Cenas: de vez em quando, andando, ele para e luta ---
+# picareta: aparece uma pedra de diamante na frente, ele bate 3x, ela vira farelo
+# e sobe um diamante. espada: chega um bug, 3 espadadas, o bug vira fumaça. A
+# ferramenta é sorteada cada vez que ele começa a andar. Tudo mora no Canvas que
+# anda pela trilha (x+ = pra frente, y- = pra fora do cartão) e cada quadro é
+# função do tempo (Quadro), então o -Foto fotografa qualquer instante (-Cena).
+$bugs = @{}
+foreach ($perna in 'p', 'q') {
+    $linhas = $desenhos.bug | ForEach-Object { $_.Replace($(if ($perna -eq 'p') { 'q' } else { 'p' }), '.') }
+    $bugs[$perna] = Desenho $linhas $coresBug
+    $bugs["$perna!"] = Desenho $linhas $coresBugVermelho
+}
+$alvo = Imagem $texturas.pedra 12
+$alvo.Visibility = 'Hidden'
+$mascote.Children.Insert(0, $alvo)  # atrás da ferramenta, que bate por cima
+$diamante = Imagem $texturas.diamante 11
+$diamante.Visibility = 'Hidden'
+[void]$mascote.Children.Add($diamante)
+$farelos = foreach ($i in 1..8) {
+    $f = New-Object Windows.Shapes.Rectangle
+    $f.Visibility = 'Hidden'
+    [void]$mascote.Children.Add($f)
+    $f
+}
+$voos = @(@(-30, -60), @(-12, -80), @(10, -75), @(28, -55), @(-22, -30), @(20, -35), @(0, -90), @(34, -20))  # px/s
+$coresFarelo = @{ pedra = '#7D7D7D', '#4AEDD9', '#A0A0A0', '#5E5E5E'; bug = '#E5E7EB', '#9CA3AF' }
+# em segundos: o alvo chega, leva 3 golpes (o 3º mata) e a cena acaba em "fim"
+$roteiros = @{ pedra = @{ chega = 0.3; golpe = 0.5; fim = 3.2 }; bug = @{ chega = 1.0; golpe = 0.45; fim = 2.9 } }
+$luta = @{ tipo = $null; relogio = New-Object Diagnostics.Stopwatch; proxima = [DateTime]::MaxValue; ferramenta = 'picareta' }
+function Pos($e, $x, $y) { [Windows.Controls.Canvas]::SetLeft($e, $x); [Windows.Controls.Canvas]::SetTop($e, $y) }
+# ângulo da ferramenta num golpe (u de 0 a 1): levanta devagar, desce rápido
+function Golpe($u) { if ($u -lt 0.7) { -40 * $u / 0.7 } else { -40 + 110 * ($u - 0.7) / 0.3 } }
+function Quadro($t) {
+    $c = $roteiros[$luta.tipo]
+    $morre = $c.chega + 3 * $c.golpe
+    $g = ($t - $c.chega) / $c.golpe  # golpes dados, com fração
+    $giro.Angle = $(if ($g -ge 0 -and $g -lt 3) { Golpe ($g % 1) } else { 0 })
+    $acerto = $(if ($g -ge 1 -and $t -lt $morre) { ($g % 1) * $c.golpe } else { 99 })  # s desde o último golpe
+    $d = $t - $morre  # s desde que morreu
+    $alvo.Visibility = $(if ($d -lt 0) { 'Visible' } else { 'Hidden' })
+    if ($luta.tipo -eq 'pedra') {
+        $alvo.RenderTransform = [Windows.Media.ScaleTransform]::new(1, [math]::Min(1.0, $t / $c.chega), 6, 12)  # brota do chão
+        Pos $alvo (16 + $(if ($acerto -lt 0.1) { 1 } else { 0 })) -12  # treme com o golpe
+        $centro = 22, -6
+    } else {
+        $x = $(if ($t -lt $c.chega) { 42 - 25 * $t / $c.chega } else { 17 + $(if ($acerto -lt 0.15) { 2 } else { 0 }) })  # chega; recua no golpe
+        Pos $alvo $x -12.8
+        $alvo.Source = $bugs["$(if ([math]::Floor($t / 0.1) % 2) { 'q' } else { 'p' })$(if ($acerto -lt 0.15) { '!' })"]
+        $centro = 27.4, -6.4
+    }
+    # farelos da pedra (caem) ou fumaça do bug (sobe devagar e cresce), por 0,6 s
+    for ($i = 0; $i -lt 8; $i++) {
+        $f = $farelos[$i]
+        $f.Visibility = $(if ($d -ge 0 -and $d -lt 0.6) { 'Visible' } else { 'Hidden' })
+        if ($f.Visibility -ne 'Visible') { continue }
+        $f.Opacity = 1 - $d / 0.6
+        if ($luta.tipo -eq 'pedra') {
+            $f.Width = 2; $f.Height = 2
+            Pos $f ($centro[0] + $voos[$i][0] * $d) ($centro[1] + $voos[$i][1] * $d + 150 * $d * $d)
+        } else {
+            # nasce numa roda em volta do bug e se abre
+            $f.Width = 3 + 5 * $d; $f.Height = $f.Width
+            $x = $centro[0] + $voos[$i][0] * (0.06 + $d * 0.3) - $f.Width / 2
+            Pos $f $x ($centro[1] + $voos[$i][1] * (0.06 + $d * 0.2) - 10 * $d - $f.Width / 2)
+        }
+    }
+    # o diamante sobe da pedra, fica balançando e some
+    $diamante.Visibility = $(if ($luta.tipo -eq 'pedra' -and $d -ge 0) { 'Visible' } else { 'Hidden' })
+    if ($diamante.Visibility -eq 'Visible') {
+        $s = [math]::Min(1.0, $d / 0.6)
+        Pos $diamante 16.5 (-11.5 - 16 * (1 - (1 - $s) * (1 - $s)) + [math]::Sin($d * 7) * 0.8)
+        $diamante.Opacity = $(if ($d -lt 1) { 1 } else { [math]::Max(0.0, 1 - ($d - 1) / 0.4) })
+    }
+}
+$quadros = New-Object Windows.Threading.DispatcherTimer
+$quadros.Interval = [TimeSpan]::FromMilliseconds(40)
+$quadros.Add_Tick({
+    $t = $luta.relogio.Elapsed.TotalSeconds
+    if ($t -lt $roteiros[$luta.tipo].fim) { Quadro $t } else { FimDaCena; Movimento }
+})
+function ComecarCena($tipo) {
+    $luta.tipo = $tipo
+    $ferramenta.Source = $texturas[$(if ($tipo -eq 'bug') { 'espada' } else { 'picareta' })]
+    if ($tipo -eq 'pedra') { $alvo.Source = $texturas.pedra; $alvo.Width = 12; $alvo.Height = 12 }
+    else { $alvo.RenderTransform = $null; $alvo.Width = 13 * 1.6; $alvo.Height = 8 * 1.6 }
+    for ($i = 0; $i -lt 8; $i++) { $farelos[$i].Fill = Cor $coresFarelo[$tipo][$i % $coresFarelo[$tipo].Count] }
+    # congela onde está: sem trilha, pulo, troca de perna nem balanço
+    $passeio.relogio.Stop()
+    $m = $mascote.RenderTransform.Value
+    $mascote.RenderTransform.BeginAnimation([Windows.Media.MatrixTransform]::MatrixProperty, $null)
+    $mascote.RenderTransform.Matrix = $m
+    $pulo.RenderTransform.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, $null)
+    $passo.Stop()
+    $pernaA.Visibility = 'Visible'; $pernaB.Visibility = 'Visible'
+    $giro.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $null)
+    $luta.relogio.Restart()
+    Quadro 0
+    $quadros.Start()
+}
+function FimDaCena {
+    $quadros.Stop()
+    $luta.tipo = $null
+    $alvo.Visibility = 'Hidden'; $diamante.Visibility = 'Hidden'
+    foreach ($f in $farelos) { $f.Visibility = 'Hidden' }
+    $giro.Angle = 0
+    $luta.proxima = [DateTime]::Now.AddSeconds((Get-Random -Minimum 20 -Maximum 45))
+    $passeio.relogio.Start()  # a trilha continua de onde parou
+}
+
+# 'andando' (algo rodando): anda, pula, troca de perna e minera (e às vezes luta).
 # 'pulando' (pergunta/permissão): parado em cima do cartão, pulando.
 # 'parado' (nada rodando): parado em cima do cartão, com as 4 pernas no chão.
 function Clawd($modo) {
     if ($passeio.modo -eq $modo) { return }
+    if ($luta.tipo) { FimDaCena }  # mudou no meio da luta
+    if ($modo -eq 'andando' -and -not $Foto) {  # o -Foto fica sempre na picareta
+        $luta.ferramenta = Get-Random -InputObject 'picareta', 'espada'
+        $ferramenta.Source = $texturas[$luta.ferramenta]
+        $luta.proxima = [DateTime]::Now.AddSeconds((Get-Random -Minimum 20 -Maximum 45))
+    }
     $passeio.modo = $modo
+    Movimento
+}
+function Movimento {
+    $modo = $passeio.modo
     $anda = $modo -eq 'andando'
     $pulo.RenderTransform.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, $(if ($modo -eq 'parado') { $null } else { $salto }))
     $passo.Stop()
@@ -632,6 +830,13 @@ if ($Foto) {
     $espera.Interval = [TimeSpan]::FromMilliseconds(1200)
     $espera.Add_Tick({
         $espera.Stop()
+        if ($Cena) {
+            $tipo, $t = -split $Cena
+            ComecarCena $tipo
+            $quadros.Stop()
+            Quadro ([double]::Parse($t, [Globalization.CultureInfo]::InvariantCulture))
+            $win.UpdateLayout()
+        }
         $imagem = [Windows.Media.Imaging.RenderTargetBitmap]::new(320, 440, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
         $imagem.Render($win.Content)
         $png = New-Object Windows.Media.Imaging.PngBitmapEncoder
@@ -646,7 +851,7 @@ if ($Foto) {
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
-        }) + "clawd: $($passeio.modo)" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+        }) + "clawd: $($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
             "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })" +
             "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))

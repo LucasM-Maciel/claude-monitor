@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -212,6 +212,10 @@ if (cenario === "misto") {
     fs.writeFileSync(path.join(pasta, "clicar.txt"), "2c3d-meio");
     clique = "vscode://local.claude-monitor/sessao?id=2c3d-meio";
     clawd = "andando";
+} else if (cenario === "pedra" || cenario === "bug") {  // no meio da luta: o diamante subindo / o bug apanhando
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    fs.writeFileSync(path.join(pasta, "cena.txt"), cenario === "pedra" ? "pedra 2.1" : "bug 1.5");
+    clawd = `andando (${cenario})`;
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);

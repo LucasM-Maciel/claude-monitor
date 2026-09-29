@@ -1,6 +1,7 @@
 ﻿# Tira do Minecraft Java instalado (~/.minecraft) o que a janelinha usa e grava
 # em ~/.claude-monitor:
-#  - picareta.png (textura da picareta de diamante, da versão mais nova instalada)
+#  - picareta.png, espada.png, diamante.png, pedra.png (texturas de diamante da
+#    versão mais nova instalada: a pedra é o minério de diamante)
 #  - sons\*.wav   (dos assets; precisa do ffmpeg: winget install Gyan.FFmpeg)
 # Sem Minecraft, a janelinha usa os sons do Windows e uma picareta desenhada.
 # Os arquivos não vão junto no pacote porque são da Mojang: cada um tira do seu jogo.
@@ -28,18 +29,21 @@ if (-not (Test-Path "$mc\assets\indexes")) {
     exit
 }
 
-# picareta: textures/item (1.13+) ou textures/items (antigas), do jar mais novo que tiver
+# texturas: textures/item e block (1.13+) ou items e blocks (antigas), do jar mais novo que tiver
+$texturas = [ordered]@{ picareta = 'items?/diamond_pickaxe'; espada = 'items?/diamond_sword'; diamante = 'items?/diamond'; pedra = 'blocks?/diamond_ore' }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $jar = Get-ChildItem "$mc\versions\*\*.jar" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending |
     Where-Object { $_.BaseName -eq $_.Directory.Name } | Select-Object -First 1
 if ($jar) {
     $zip = [IO.Compression.ZipFile]::OpenRead($jar.FullName)
     try {
-        $png = $zip.Entries | Where-Object { $_.FullName -match '^assets/minecraft/textures/items?/diamond_pickaxe\.png$' } | Select-Object -First 1
-        if ($png) {
-            New-Item -ItemType Directory -Force $destino | Out-Null
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($png, (Join-Path $destino 'picareta.png'), $true)
-            Write-Host "picareta.png (de $($jar.Name))"
+        foreach ($nome in $texturas.Keys) {
+            $png = $zip.Entries | Where-Object { $_.FullName -match "^assets/minecraft/textures/$($texturas[$nome])\.png$" } | Select-Object -First 1
+            if ($png) {
+                New-Item -ItemType Directory -Force $destino | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($png, (Join-Path $destino "$nome.png"), $true)
+                Write-Host "$nome.png (de $($jar.Name))"
+            }
         }
     } finally { $zip.Dispose() }
 }

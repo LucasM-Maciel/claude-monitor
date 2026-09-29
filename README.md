@@ -24,7 +24,8 @@ você, ela avisa com um som.
   vermelho em 95%.
 - **O Clawd** (o bichinho laranja): anda em volta minerando quando alguma
   sessão está rodando, pula quando alguém está esperando você e fica parado
-  quando está tudo quieto.
+  quando está tudo quieto. Andando, de vez em quando ele para e luta: com a
+  picareta, quebra uma pedra e sobe um diamante; com a espada, mata um bug.
 - **Som**: quando uma sessão termina ou precisa de você, e um som especial
   quando termina a última (tudo pronto).
 - **Dentro do VS Code**: uma aba "Claude Monitor" na barra lateral com as
@@ -93,7 +94,8 @@ estiver trabalhando nele.
 Quem tem o **Minecraft Java** instalado pode trocar os sons pelos do jogo: o
 "hmm" do aldeão quando alguém espera você, o som de XP quando uma sessão termina
 e o de **subir de nível** quando termina a última (nada mais rodando nem esperando
-você). A picareta de diamante do Clawd também vira a do jogo. Precisa do ffmpeg:
+você). A picareta, a espada, a pedra e o diamante do Clawd também viram os do
+jogo. Precisa do ffmpeg:
 
 - Windows: `winget install Gyan.FFmpeg`
 - Mac: `brew install ffmpeg`
