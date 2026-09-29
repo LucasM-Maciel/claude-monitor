@@ -146,7 +146,7 @@ function Tempo($min) {
 
 function Sessoes($agora) {
     $vistas = @{}
-    Get-ChildItem $dir -Filter *.json -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-ChildItem $dir -Filter *.json -ErrorAction Ignore | ForEach-Object {
         try { $s = Get-Content $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
         # mesma regra da extensão: pid vivo; sem pid, atualizada nas últimas 6h
         if ($s.pid) { if (-not (Get-Process -Id $s.pid -ErrorAction Ignore)) { return } }  # Ignore: sessão morta não conta nos erros do "fechou"
@@ -199,7 +199,7 @@ function Titulo($transcript) {
 $leituras = @{}  # transcript -> @{ tamanho; resultado }
 function UltimoPedido($transcript) {
     if (-not $transcript) { return $null }
-    $info = Get-Item -LiteralPath $transcript -ErrorAction SilentlyContinue
+    $info = Get-Item -LiteralPath $transcript -ErrorAction Ignore  # Ignore: transcript apagado não conta nos erros do "fechou"
     if (-not $info) { return $null }
     $cache = $leituras[$transcript]
     if ($cache -and $cache.tamanho -eq $info.Length) { return $cache.resultado }
@@ -242,7 +242,7 @@ function Situacao($s) {
     # depois de aprovar uma permissão nenhum hook dispara até a sessão parar; se o
     # transcript mexeu depois do pedido, ela voltou a trabalhar (regra da extensão)
     if ($estado -eq 'permission' -and $s.transcript) {
-        $mexeu = (Get-Item -LiteralPath $s.transcript -ErrorAction SilentlyContinue).LastWriteTimeUtc
+        $mexeu = (Get-Item -LiteralPath $s.transcript -ErrorAction Ignore).LastWriteTimeUtc
         if ($mexeu -and ([DateTimeOffset]$mexeu).ToUnixTimeMilliseconds() / 1000 -gt $s.since + 2) { $estado = 'working' }
     }
     $pedido = UltimoPedido $s.transcript
