@@ -153,6 +153,33 @@ function copiarJanelinha(context) {
     fs.writeFileSync(marca, versao);
     anotar(`copiou a janelinha ${versao} (antes: ${copiada || "nenhuma"})`);
 }
+/**
+ * O instalador troca a extensão, mas a janela aberta segue com a velha até
+ * recarregar (29/09: o clique "não funcionava" porque o VS Code rodava a anterior).
+ * A marca da janelinha diz a versão instalada: mais nova que esta, oferece
+ * recarregar, uma vez. Sozinho não: derrubaria o Claude trabalhando na janela.
+ */
+let avisouAtualizacao = false;
+function conferirAtualizacao(versao) {
+    if (avisouAtualizacao)
+        return;
+    let instalada = "";
+    try {
+        instalada = fs.readFileSync(path.join(sessions_1.MONITOR_DIR, "versao-janelinha"), "utf8").trim();
+    }
+    catch {
+        return;
+    }
+    if (instalada.localeCompare(versao, undefined, { numeric: true }) <= 0)
+        return;
+    avisouAtualizacao = true;
+    vscode.window
+        .showInformationMessage(`Claude Monitor atualizou pra ${instalada}. Recarregar a janela pra usar? (o Claude que estiver trabalhando nela para)`, "Recarregar")
+        .then((escolha) => {
+        if (escolha === "Recarregar")
+            vscode.commands.executeCommand("workbench.action.reloadWindow");
+    });
+}
 /** Mac: compila overlay.swift quando o binário não existe ou ficou mais velho que ele. */
 function compilarMac() {
     const fonte = path.join(sessions_1.MONITOR_DIR, "overlay.swift");
@@ -418,6 +445,7 @@ function activate(context) {
             return;
         running = true;
         try {
+            conferirAtualizacao(context.extension.packageJSON.version);
             const fresh = await (0, sessions_1.readSessions)();
             for (const s of fresh) {
                 const prev = lastStates.get(s.id);

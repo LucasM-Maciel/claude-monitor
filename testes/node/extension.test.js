@@ -194,6 +194,34 @@ test("versão nova da extensão troca o overlay (e a janelinha aberta se reabre)
     assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), new RegExp(`copiou a janelinha 99\\.0\\.0 \\(antes: ${manifesto.version.replace(/\./g, "\\.")}\\)`));
 });
 
+test("instalaram versão mais nova com a janela aberta: oferece recarregar, uma vez só", async () => {
+    const { r, pasta } = await ativar();
+    r.vscode.window.showInformationMessage = (texto, ...botoes) => {
+        r.mensagens.push({ tipo: "info", texto, botoes });
+        return Promise.resolve(botoes[0]);  // clicou "Recarregar"
+    };
+    fs.writeFileSync(path.join(pasta, "versao-janelinha"), "99.0.0");  // o instalador grava depois de instalar a extensão
+    await r.comandos.get("claudeMonitor.refresh")();
+    await r.comandos.get("claudeMonitor.refresh")();
+    const avisos = r.mensagens.filter((m) => m.texto.includes("atualizou"));
+    assert.strictEqual(avisos.length, 1, JSON.stringify(r.mensagens));
+    assert.match(avisos[0].texto, /99\.0\.0/);
+    assert.deepStrictEqual(avisos[0].botoes, ["Recarregar"]);
+    await new Promise(setImmediate);
+    assert.deepStrictEqual(r.executados.at(-1), ["workbench.action.reloadWindow"]);
+});
+
+test("versão instalada igual ou mais velha: não oferece recarregar", async () => {
+    // [rodando, instalada, avisa]: 0.4.10 > 0.4.9 por número, não por texto
+    for (const [rodando, instalada, avisa] of [["0.4.7", "0.4.7", false], ["0.5.0", "0.4.10", false], ["0.4.9", "0.4.10", true]]) {
+        const { r, pasta } = await ativar({ versao: rodando });
+        fs.writeFileSync(path.join(pasta, "versao-janelinha"), instalada);
+        await r.comandos.get("claudeMonitor.refresh")();
+        assert.strictEqual(r.mensagens.some((m) => m.texto.includes("atualizou")), avisa, `${rodando} rodando, ${instalada} instalada`);
+        desativar();
+    }
+});
+
 test("diário da janelinha passou de 256 KB: vira .1 e começa de novo", async () => {
     const { casa, pasta } = await ativar();
     fs.writeFileSync(path.join(pasta, "janelinha.log"), "x".repeat(300 * 1024));
