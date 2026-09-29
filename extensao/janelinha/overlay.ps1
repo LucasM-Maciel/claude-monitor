@@ -783,22 +783,25 @@ function AbrirSessao($id) {
 }
 # o mesmo zip do botão Baixar da extensão (com o COMO ATUALIZAR.txt dentro)
 $zip = 'https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip'
-function Clicar($alvo) {
-    if ($alvo -like 'sessao:*') { AbrirSessao $alvo.Substring(7); return }
-    if ($alvo -ne 'baixar') { return }
+function Clicar($qual) {
+    if ($qual -like 'sessao:*') { AbrirSessao $qual.Substring(7); return }
+    if ($qual -ne 'baixar') { return }
     if ($Foto) { $script:cliqueDaVez = $zip; return }
     try { Start-Process $zip -ErrorAction Stop; Anotar "baixando a versão nova pelo aviso" } catch { Anotar "não abri $zip ($_)" }
 }
 $win.Add_MouseLeftButtonDown({
     if ($_.ClickCount -eq 2) { TrazerVSCode; return }
     # já na descida: durante o arrasto a lista pode se redesenhar
-    $alvo = AlvoNoPonto ($_.GetPosition($win))
+    # O DragMove roda os timers (Clawd, cenas) DENTRO deste bloco, e o PowerShell acha
+    # variável pela pilha: nome daqui igual a um do script (ex. $alvo, a pedra) troca
+    # o dele no meio do arrasto (crash 29/09, 0.5.2). O teste "nomes do clique" barra.
+    $clicado = AlvoNoPonto ($_.GetPosition($win))
     $lugar.arrastando = $true
     try { $win.DragMove() } finally { $lugar.arrastando = $false }
     $clicou = [math]::Abs($win.Left - $lugar.x) -le 2 -and [math]::Abs($win.Top - $lugar.y) -le 2  # não arrastou
     $lugar.x = $win.Left
     $lugar.y = $win.Top
-    if ($clicou -and $alvo) { Clicar $alvo }
+    if ($clicou -and $clicado) { Clicar $clicado }
 })
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = 'Fechar'
@@ -883,8 +886,8 @@ if ($Foto) {
         # -Clicar: o meio da linha daquela sessão (ou do aviso, com "baixar"), pelo mesmo caminho do clique de verdade
         $linha = @(@($painelSessoes.Children) + @($painelAviso.Children) | Where-Object { "$($_.Tag)" -in "sessao:$Clicar", $Clicar })[0]
         if ($Clicar -and $linha) {
-            $alvo = AlvoNoPonto ($linha.TranslatePoint([Windows.Point]::new($linha.ActualWidth / 2, $linha.ActualHeight / 2), $win))
-            if ($alvo) { Clicar $alvo }
+            $achou = AlvoNoPonto ($linha.TranslatePoint([Windows.Point]::new($linha.ActualWidth / 2, $linha.ActualHeight / 2), $win))
+            if ($achou) { Clicar $achou }
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"

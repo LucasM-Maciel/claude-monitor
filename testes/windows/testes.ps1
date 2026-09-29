@@ -187,6 +187,18 @@ Teste "cores das bolinhas e das barras no cenário 'misto'" {
 Teste "barra vermelha quando o 5h passa de 95% (cenário 'andando')" {
     Verdade ([Pixels]::Contar("$Saida\windows-andando.png", 239, 68, 68, 25) -gt 10) 'barra não ficou vermelha'
 }
+# O DragMove roda os timers do Clawd dentro do clique e o PowerShell acha variável pela
+# pilha: um $alvo no clique trocou a pedra da cena e derrubou a janelinha (29/09, 0.5.2)
+Teste 'nomes do clique: nenhuma variável do clique tem o nome de uma do script' {
+    $raizAst = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)
+    $atribuidas = { param($bloco) @($bloco.FindAll({ param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $n.Left -is [Management.Automation.Language.VariableExpressionAst] }, $false) | ForEach-Object { $_.Left.VariablePath.UserPath }) }
+    $clique = $raizAst.Find({ param($n) $n -is [Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Value -eq 'Add_MouseLeftButtonDown' }, $true)
+    Verdade $clique 'não achei o $win.Add_MouseLeftButtonDown'
+    $doScript = & $atribuidas $raizAst
+    $comuns = @(& $atribuidas $clique.Arguments[0].ScriptBlock | Where-Object { $_ -in $doScript } | Sort-Object -Unique)
+    Verdade (-not $comuns) "variável do clique com nome de uma do script: $($comuns -join ', ')"
+}
 
 $mutexAberto = $null
 if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto)) {
