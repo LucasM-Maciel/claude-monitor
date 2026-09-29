@@ -166,12 +166,18 @@ t_cenario() {
     [ "$(pixels "$foto" 74 237 217 40)" -gt 5 ] || falha "cadê a ferramenta desenhada (ciano)?" || return 1
   fi
   if [ "$c" = bug ]; then
-    [ "$(pixels "$foto" 239 68 68 30)" -gt 20 ] || falha "o bug não ficou vermelho com a espadada"
+    [ "$(pixels "$foto" 239 68 68 30)" -gt 20 ] || falha "o bug não ficou vermelho com a espadada" || return 1
+  fi
+  if [ "$c" = atualizar ]; then
+    [ "$(pixels "$foto" 167 139 250 30)" -gt 10 ] || falha "cadê o aviso roxo da versão nova?" || return 1
+  fi
+  if [ "$c" = misto ]; then
+    [ "$(pixels "$foto" 167 139 250 30)" -lt 3 ] || falha "aviso roxo sem versão nova"
   fi
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug atualizar; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 t_cores() {

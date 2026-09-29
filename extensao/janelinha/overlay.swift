@@ -8,6 +8,7 @@
 // do Mac e uma picareta desenhada aqui.
 // Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
 // traz o VS Code. Botão direito: "Fechar".
+// Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 // A extensão compila isto (xcrun swiftc -swift-version 5 -O -o ClaudeMonitor
 // overlay.swift) e abre; a trava em overlay.lock deixa uma só. Quando o binário
 // muda (versão nova), ela se reabre sozinha.
@@ -335,6 +336,25 @@ func abrirSessao(_ id: String) {
     trazerEditor()
 }
 
+// versão nova: a extensão pergunta pro GitHub 1x por dia e grava a publicada em
+// consulta-versao; a instalada está em versao-janelinha (o instalador grava)
+func versaoNova() -> String? {
+    func ler(_ nome: String) -> String? {
+        (try? String(contentsOfFile: pasta + "/" + nome, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let publicada = ler("consulta-versao"), let instalada = ler("versao-janelinha"), !instalada.isEmpty,
+          publicada.compare(instalada, options: .numeric) == .orderedDescending else { return nil }
+    return publicada
+}
+// o mesmo zip do botão Baixar da extensão (com o COMO ATUALIZAR.txt dentro)
+let zip = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"
+func clicar(_ alvo: String) {
+    if alvo.hasPrefix("sessao:") { abrirSessao(String(alvo.dropFirst(7))); return }
+    guard alvo == "baixar" else { return }
+    if arquivoFoto != nil { cliqueDaVez = zip; return }
+    if let u = URL(string: zip) { NSWorkspace.shared.open(u) }
+}
+
 func trazerEditor() {
     for id in ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92"]
     where !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty {
@@ -367,18 +387,25 @@ final class Raiz: NSView {
 final class Cartao: NSView {
     var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String)] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
+    var aviso: String?  // saiu versão nova: a linha roxa embaixo
+    var yAviso: CGFloat = 0
     override var isFlipped: Bool { true }
 
     // preso no canto de baixo à direita, cresce pra cima
     func arrumar() {
         let n = CGFloat(max(linhas.count, 1))
         let u = CGFloat(max(uso?.count ?? 1, 1))
-        let h = 6 + n * 20 + 10 + u * 20 + 6
+        yAviso = 6 + n * 20 + 10 + u * 20 + 10
+        let h = yAviso - 10 + (aviso == nil ? 0 : 10 + 20) + 6
         frame = NSRect(x: L - M - 242, y: A - M - h, width: 242, height: h)
         removeAllToolTips()
         dicas = linhas.map { $0.rotulo as NSString }
         for (i, d) in dicas.enumerated() {
             addToolTip(NSRect(x: 0, y: 6 + CGFloat(i) * 20, width: 242, height: 20), owner: d, userData: nil)
+        }
+        if aviso != nil {
+            dicas.append("Baixa o zip: extraia e siga o COMO ATUALIZAR.txt")
+            addToolTip(NSRect(x: 0, y: yAviso, width: 242, height: 20), owner: dicas[dicas.count - 1], userData: nil)
         }
         needsDisplay = true
     }
@@ -403,6 +430,11 @@ final class Cartao: NSView {
         hex("#33FFFFFF").setFill()
         NSRect(x: x, y: y, width: 222, height: 1).fill()
         y += 5
+        if let nova = aviso {
+            hex("#33FFFFFF").setFill()
+            NSRect(x: x, y: yAviso - 5, width: 222, height: 1).fill()
+            escrever("↑ versão \(nova) disponível · baixar", hex("#A78BFA"), NSRect(x: x, y: yAviso, width: 222, height: 20))
+        }
         guard let medidas = uso else {
             escrever("usage indisponível", hex("#6B7280"), NSRect(x: x, y: y, width: 222, height: 20))
             return
@@ -424,25 +456,27 @@ final class Cartao: NSView {
         }
     }
 
-    // a sessão da linha nesse ponto (coordenadas do cartão: linhas de 20 a partir de y = 6)
-    func sessaoNoPonto(_ p: NSPoint) -> String? {
+    // a linha nesse ponto (coordenadas do cartão: sessões de 20 a partir de y = 6, o
+    // aviso em yAviso): "sessao:<id>" ou "baixar", como o Tag do Windows
+    func alvoNoPonto(_ p: NSPoint) -> String? {
         guard bounds.contains(p), p.y >= 6 else { return nil }
+        if aviso != nil, p.y >= yAviso, p.y < yAviso + 20 { return "baixar" }
         let i = Int((p.y - 6) / 20)
-        return i < linhas.count ? linhas[i].id : nil
+        return i < linhas.count ? "sessao:" + linhas[i].id : nil
     }
 
     // arrasto na mão (o performDrag deixa o arrasto com o sistema e aí não dá pra
     // saber se foi só um clique): andou menos de 3 pontos = clique
     var inicioMouse = NSPoint.zero, inicioJanela = NSPoint.zero
-    var sessaoClicada: String?
+    var alvoClicado: String?
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
-        sessaoClicada = nil
+        alvoClicado = nil
         if event.clickCount == 2 { trazerEditor(); return }
         inicioMouse = NSEvent.mouseLocation
         inicioJanela = window?.frame.origin ?? .zero
         // já na descida: durante o arrasto a lista pode se redesenhar
-        sessaoClicada = sessaoNoPonto(convert(event.locationInWindow, from: nil))
+        alvoClicado = alvoNoPonto(convert(event.locationInWindow, from: nil))
     }
     override func mouseDragged(with event: NSEvent) {
         let m = NSEvent.mouseLocation
@@ -450,8 +484,8 @@ final class Cartao: NSView {
     }
     override func mouseUp(with event: NSEvent) {
         let m = NSEvent.mouseLocation
-        if let id = sessaoClicada, hypot(m.x - inicioMouse.x, m.y - inicioMouse.y) < 3 { abrirSessao(id) }
-        sessaoClicada = nil
+        if let alvo = alvoClicado, hypot(m.x - inicioMouse.x, m.y - inicioMouse.y) < 3 { clicar(alvo) }
+        alvoClicado = nil
     }
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
@@ -871,6 +905,7 @@ func atualizar() {
         return (id: s.id, cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo)
     }
     buscarUso()
+    cartao.aviso = versaoNova()
     cartao.arrumar()  // redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
     // pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado.
     // Depois do arrumar: na 1ª vez o cartão ainda tem largura 0 e o Clawd sairia por baixo
@@ -879,14 +914,15 @@ func atualizar() {
                 : situacoes.contains("working") ? "andando" : "parado")
     palco.needsDisplay = true
     if let foto = arquivoFoto {
-        // --clicar: o meio da linha daquela sessão, pelo mesmo caminho do clique de verdade
-        if let alvo = argumento("--clicar"), let i = cartao.linhas.firstIndex(where: { $0.id == alvo }),
-           let id = cartao.sessaoNoPonto(NSPoint(x: cartao.bounds.midX, y: 6 + CGFloat(i) * 20 + 10)) {
-            abrirSessao(id)
+        // --clicar: o meio da linha daquela sessão (ou do aviso, com "baixar"), pelo mesmo caminho do clique de verdade
+        if let alvo = argumento("--clicar") {
+            let y: CGFloat? = alvo == "baixar" ? cartao.yAviso + 10 : cartao.linhas.firstIndex(where: { $0.id == alvo }).map { 6 + CGFloat($0) * 20 + 10 }
+            if let y = y, let achou = cartao.alvoNoPonto(NSPoint(x: cartao.bounds.midX, y: y)) { clicar(achou) }
         }
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
             + ["clawd: \(palco.modo)\(palco.luta.map { " (\($0))" } ?? "")", "usage: \(uso == nil ? "indisponivel" : "ok")",
-               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")"]
+               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
+               "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
     seAtualizou()

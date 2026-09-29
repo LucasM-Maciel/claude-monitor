@@ -70,7 +70,8 @@ que já estavam abertas precisam ser reabertas pra aparecer; as novas aparecem
 sozinhas.
 
 **Pra atualizar**: quando sai versão nova, o VS Code avisa "Claude Monitor X
-disponível" com o botão **Baixar**. Baixe, extraia e siga o `COMO ATUALIZAR.txt`
+disponível" com o botão **Baixar**, e a janelinha ganha uma linha roxa "↑ versão X
+disponível · baixar" (clique nela). Baixe, extraia e siga o `COMO ATUALIZAR.txt`
 que vem no zip (é instalar de novo por cima). Depois o VS Code avisa "Claude
 Monitor atualizou" com o botão **Recarregar**: clique quando nenhum Claude
 estiver trabalhando nele.

@@ -234,12 +234,14 @@ test("versão instalada igual ou mais velha: não oferece recarregar", async () 
 test("versão nova no GitHub: oferece baixar o zip (com o COMO ATUALIZAR), 1x por dia entre as janelas", async () => {
     publicada = "v99.0.0";
     try {
-        const { r, casa } = await ativar({ clicar: "Baixar" });
+        const { r, casa, pasta } = await ativar({ clicar: "Baixar" });
         const aviso = r.mensagens.find((m) => m.texto.includes("disponível"));
         assert.ok(aviso, JSON.stringify(r.mensagens));
         assert.match(aviso.texto, /99\.0\.0.*COMO ATUALIZAR\.txt/);
         assert.deepStrictEqual(aviso.botoes, ["Baixar"]);
         assert.deepStrictEqual(r.abertos, ["https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"]);
+        // a janelinha lê daqui a versão publicada pra mostrar o aviso dela
+        assert.strictEqual(fs.readFileSync(path.join(pasta, "consulta-versao"), "utf8"), "99.0.0");
         desativar();
         consultas = 0;
         const outra = await ativar({ casa });  // outra janela, no mesmo dia

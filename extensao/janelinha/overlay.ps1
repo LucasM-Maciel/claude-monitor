@@ -9,6 +9,7 @@
 # Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
 # traz o VS Code. Botão direito: "Fechar".
 # Passar o mouse numa sessão: o estado dela.
+# Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 # A extensão abre isto a cada janela do VS Code; o mutex deixa uma só. Quando a
 # extensão atualiza este arquivo, a janelinha se reabre sozinha com a versão nova.
 # Teste: -Foto arquivo.png desenha, salva e sai (sem internet: o usage vem de -ArquivoUso
@@ -102,6 +103,7 @@ $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a 
         <StackPanel Name="Sessoes"/>
         <Border Height="1" Background="#33FFFFFF" Margin="0,5,0,4"/>
         <StackPanel Name="Uso"/>
+        <StackPanel Name="Aviso"/>
       </StackPanel>
     </Border>
     <Canvas Name="Mascote" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -114,6 +116,7 @@ $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x
 $cartao = $win.FindName('Cartao')
 $painelSessoes = $win.FindName('Sessoes')
 $painelUso = $win.FindName('Uso')
+$painelAviso = $win.FindName('Aviso')
 $mascote = $win.FindName('Mascote')
 $cartao.Margin = [Windows.Thickness]::new($margem)
 
@@ -296,6 +299,17 @@ function Medidor($rotulo, $dado) {
     Linha (Texto $rotulo '#9CA3AF' 18) $trilho $p $f
 }
 
+# versão nova: a extensão pergunta pro GitHub 1x por dia e grava a publicada em
+# consulta-versao; a instalada está em versao-janelinha (o instalador grava).
+# Sem os dois, nada (Exists antes: erro pego no catch ainda soma no "fechou (N erros)").
+function VersaoNova {
+    $publicada, $instalada = "$Pasta\consulta-versao", "$Pasta\versao-janelinha"
+    if (-not ([IO.File]::Exists($publicada) -and [IO.File]::Exists($instalada))) { return }
+    $p = $i = $null
+    try { $publicada, $instalada = [IO.File]::ReadAllText($publicada).Trim(), [IO.File]::ReadAllText($instalada).Trim() } catch { return }
+    if ([version]::TryParse($publicada, [ref]$p) -and [version]::TryParse($instalada, [ref]$i) -and $p -gt $i) { $publicada }
+}
+
 function Atualizar {
     $agora = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
     $sessoes = @(Sessoes $agora)
@@ -350,6 +364,21 @@ function Atualizar {
         [void]$painelUso.Children.Add((Medidor '7d' $uso.dados.seven_day))
     } else {
         [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280'))
+    }
+    $painelAviso.Children.Clear()
+    $nova = VersaoNova
+    if ($nova) {
+        $traco = New-Object Windows.Controls.Border
+        $traco.Height = 1; $traco.Background = Cor '#33FFFFFF'; $traco.Margin = [Windows.Thickness]::new(0, 5, 0, 4)
+        $texto = Texto "↑ versão $nova disponível · baixar" '#A78BFA' 222
+        $texto.TextTrimming = 'CharacterEllipsis'
+        $aviso = Linha $texto
+        $aviso.Background = [Windows.Media.Brushes]::Transparent
+        $aviso.ToolTip = 'Baixa o zip: extraia e siga o COMO ATUALIZAR.txt'
+        $aviso.Tag = 'baixar'
+        $aviso.Cursor = [Windows.Input.Cursors]::Hand
+        [void]$painelAviso.Children.Add($traco)
+        [void]$painelAviso.Children.Add($aviso)
     }
 }
 
@@ -740,10 +769,10 @@ function TrazerVSCode {
     $shell = New-Object -ComObject WScript.Shell
     if (-not $shell.AppActivate('Visual Studio Code')) { [void]$shell.AppActivate('Cursor') }
 }
-# a sessão da linha nesse ponto da janela (a linha guarda "sessao:<id>" no Tag), ou nada
-function SessaoNoPonto($ponto) {
+# a linha nesse ponto da janela: "sessao:<id>" (sessão) ou "baixar" (versão nova), guardado no Tag; ou nada
+function AlvoNoPonto($ponto) {
     for ($e = [Windows.Media.VisualTreeHelper]::HitTest($win, $ponto).VisualHit; $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
-        if ("$($e.Tag)" -like 'sessao:*') { return "$($e.Tag)".Substring(7) }
+        if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
     }
 }
 # a extensão recebe o link e abre a aba (ou o terminal) da sessão, como o clique na lista dela
@@ -752,16 +781,24 @@ function AbrirSessao($id) {
     if ($Foto) { $script:cliqueDaVez = $url; return }
     try { Start-Process $url -ErrorAction Stop } catch { Anotar "não abri $url ($_)"; TrazerVSCode }
 }
+# o mesmo zip do botão Baixar da extensão (com o COMO ATUALIZAR.txt dentro)
+$zip = 'https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip'
+function Clicar($alvo) {
+    if ($alvo -like 'sessao:*') { AbrirSessao $alvo.Substring(7); return }
+    if ($alvo -ne 'baixar') { return }
+    if ($Foto) { $script:cliqueDaVez = $zip; return }
+    try { Start-Process $zip -ErrorAction Stop; Anotar "baixando a versão nova pelo aviso" } catch { Anotar "não abri $zip ($_)" }
+}
 $win.Add_MouseLeftButtonDown({
     if ($_.ClickCount -eq 2) { TrazerVSCode; return }
     # já na descida: durante o arrasto a lista pode se redesenhar
-    $sessao = SessaoNoPonto ($_.GetPosition($win))
+    $alvo = AlvoNoPonto ($_.GetPosition($win))
     $lugar.arrastando = $true
     try { $win.DragMove() } finally { $lugar.arrastando = $false }
     $clicou = [math]::Abs($win.Left - $lugar.x) -le 2 -and [math]::Abs($win.Top - $lugar.y) -le 2  # não arrastou
     $lugar.x = $win.Left
     $lugar.y = $win.Top
-    if ($clicou -and $sessao) { AbrirSessao $sessao }
+    if ($clicou -and $alvo) { Clicar $alvo }
 })
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = 'Fechar'
@@ -843,17 +880,18 @@ if ($Foto) {
         $png.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($imagem))
         $arquivo = [IO.File]::Create($Foto)
         try { $png.Save($arquivo) } finally { $arquivo.Dispose() }
-        # -Clicar: o meio da linha daquela sessão, pelo mesmo caminho do clique de verdade
-        $alvo = @($painelSessoes.Children | Where-Object { "$($_.Tag)" -eq "sessao:$Clicar" })[0]
-        if ($Clicar -and $alvo) {
-            $sessao = SessaoNoPonto ($alvo.TranslatePoint([Windows.Point]::new($alvo.ActualWidth / 2, $alvo.ActualHeight / 2), $win))
-            if ($sessao) { AbrirSessao $sessao }
+        # -Clicar: o meio da linha daquela sessão (ou do aviso, com "baixar"), pelo mesmo caminho do clique de verdade
+        $linha = @(@($painelSessoes.Children) + @($painelAviso.Children) | Where-Object { "$($_.Tag)" -in "sessao:$Clicar", $Clicar })[0]
+        if ($Clicar -and $linha) {
+            $alvo = AlvoNoPonto ($linha.TranslatePoint([Windows.Point]::new($linha.ActualWidth / 2, $linha.ActualHeight / 2), $win))
+            if ($alvo) { Clicar $alvo }
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
         }) + "clawd: $($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
             "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })" +
-            "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })"
+            "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })" +
+            "atualizacao: $(if ($n = VersaoNova) { $n } else { 'nenhuma' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))
         $win.Close()
     })

@@ -149,7 +149,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -172,6 +172,8 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'cadê o diamante (diamante.png) subindo?' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
         if ($cenario -eq 'bug') { Verdade ([Pixels]::Contar($foto, 239, 68, 68, 20) -gt 20) 'o bug não ficou vermelho com a espadada' }
+        if ($cenario -eq 'atualizar') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -gt 10) 'cadê o aviso roxo da versão nova?' }
+        if ($cenario -eq 'misto') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -lt 3) 'aviso roxo sem versão nova' }
         Verdade (-not (Test-Path "$pasta\janelinha.log")) 'o -Foto anotou no diário'
     }
 }

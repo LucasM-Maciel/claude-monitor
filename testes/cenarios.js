@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -97,6 +97,12 @@ let clawd;
 let temUso = false;
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup
 let clique = "nenhum";  // o link que o clique abriria (a sessão a clicar vai em clicar.txt)
+let atualizacao = "nenhuma";  // a versão nova que o aviso roxo mostra
+// consulta-versao: a última publicada no GitHub (a extensão grava); versao-janelinha: a instalada
+function versoes(publicada, instalada) {
+    fs.writeFileSync(path.join(pasta, "consulta-versao"), publicada);
+    fs.writeFileSync(path.join(pasta, "versao-janelinha"), instalada);
+}
 if (cenario === "misto") {
     sessao("renomeada", {
         estado: "working", mostra: ["Minha sessão renomeada", "working"],
@@ -166,6 +172,7 @@ if (cenario === "misto") {
     clawd = "pulando";  // pergunta/permissão ganha de trabalhando
     uso(42.4, 85);
     temUso = true;
+    versoes("0.5.9", "0.5.10");  // instalada mais nova que a publicada (compara número, não texto): sem aviso
 } else if (cenario === "andando") {
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     sessao("b", { estado: "working", mostra: ["Escrevendo código", "working"], linhas: [titulo("Escrevendo código"), ferramenta("Edit")] });
@@ -216,6 +223,13 @@ if (cenario === "misto") {
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     fs.writeFileSync(path.join(pasta, "cena.txt"), cenario === "pedra" ? "pedra 2.1" : "bug 1.5");
     clawd = `andando (${cenario})`;
+} else if (cenario === "atualizar") {  // saiu versão nova: aviso roxo, o clique nele baixa o zip
+    sessao("a", { estado: "waiting", mostra: ["Tudo pronto", "finished"], linhas: [titulo("Tudo pronto"), texto("Feito.")] });
+    versoes("0.5.10\n", "0.5.9");  // 0.5.10 > 0.5.9 só comparando número
+    fs.writeFileSync(path.join(pasta, "clicar.txt"), "baixar");
+    atualizacao = "0.5.10";
+    clique = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip";
+    clawd = "parado";
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);
@@ -223,6 +237,6 @@ if (cenario === "misto") {
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
-linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `clique: ${clique}`);
+linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");
 console.log(linhas.join("\n"));
