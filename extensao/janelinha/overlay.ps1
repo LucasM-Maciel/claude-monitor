@@ -17,6 +17,9 @@
 param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar)
 Add-Type -AssemblyName PresentationFramework
 if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
+# quem me abre de dentro do VS Code me passa ELECTRON_RUN_AS_NODE=1; com ele, o Code.exe
+# que o vscode:// do clique chama roda como Node e morre calado (visto 29/09)
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction Ignore
 
 # diário em janelinha.log: quem abriu, quem desistiu, quando se reabriu, erros.
 # Às vezes ela some ao atualizar e não se sabe por quê. O -Foto não anota.
@@ -145,7 +148,7 @@ function Sessoes($agora) {
     Get-ChildItem $dir -Filter *.json -ErrorAction SilentlyContinue | ForEach-Object {
         try { $s = Get-Content $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
         # mesma regra da extensão: pid vivo; sem pid, atualizada nas últimas 6h
-        if ($s.pid) { if (-not (Get-Process -Id $s.pid -ErrorAction SilentlyContinue)) { return } }
+        if ($s.pid) { if (-not (Get-Process -Id $s.pid -ErrorAction Ignore)) { return } }  # Ignore: sessão morta não conta nos erros do "fechou"
         elseif ($agora - $s.updated -gt 6 * 3600) { return }
         $s | Add-Member -NotePropertyName id -NotePropertyValue $_.BaseName
         $titulo = Titulo $s.transcript
