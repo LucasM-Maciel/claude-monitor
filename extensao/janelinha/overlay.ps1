@@ -31,7 +31,7 @@ function Hora($utc) { if ($utc) { $utc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:
 function Pai {
     try {
         $id = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
-        $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+        $p = Get-Process -Id $id -ErrorAction Ignore  # Ignore: o pai que já saiu não conta nos erros do "fechou"
         "pai $id $(if ($p) { $p.ProcessName } else { '(já saiu)' })"
     } catch { 'pai ?' }
 }
