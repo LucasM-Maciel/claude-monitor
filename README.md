@@ -103,7 +103,9 @@ voltar, confira se o Claude Code está logado com a conta do Claude (`/login`),
 e não com chave de API.
 
 **A janelinha sumiu.** `Ctrl+Shift+P` > **Claude Monitor: Abrir janelinha
-flutuante**.
+flutuante**. Se ela sumiu sozinha (depois de atualizar, por exemplo), mande o
+arquivo `janelinha.log` da pasta `.claude-monitor` (dentro da sua pasta de
+usuário) pra quem te passou o Claude Monitor.
 
 **A bolinha está errada** (amarela sem pedir nada, por exemplo). Tire um print
 e mande pra quem te passou o Claude Monitor.

@@ -139,6 +139,7 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a picareta desenhada (ciano)?' }
+        Verdade (-not (Test-Path "$pasta\janelinha.log")) 'o -Foto anotou no diário'
     }
 }
 Teste "cores das bolinhas e das barras no cenário 'misto'" {
@@ -177,7 +178,17 @@ if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto
         $nova = $null
         for ($i = 0; $i -lt 40 -and -not $nova; $i++) { Start-Sleep -Milliseconds 250; $nova = & $janelinhas | Where-Object ProcessId -ne $primeira.Id }
         Verdade $nova 'não reabriu depois de mudar'
+        $novaId = @($nova)[0].ProcessId
+        # o diário conta a história toda: abriu, a 2ª desistiu, se reabriu na nova, a velha fechou
+        $diario = "$pasta\janelinha.log"
+        for ($i = 0; $i -lt 40 -and -not ((Test-Path $diario) -and (Ler $diario) -match "\[$novaId\] abriu"); $i++) { Start-Sleep -Milliseconds 250 }
         $nova | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+        $texto = Ler $diario
+        foreach ($esperado in "\[$($primeira.Id)\] abriu: arquivo de \S+ \S+ \(pai \d+ ", "\[$($segunda.Id)\] saiu: já tem uma aberta \(pai ",
+                             "\[$($primeira.Id)\] arquivo mudou \(\S+ \S+ -> \S+ \S+\): reabri como \[$novaId\]",
+                             "\[$novaId\] abriu: arquivo de ", "\[$($primeira.Id)\] fechou \(\d+ erros") {
+            Verdade ($texto -match $esperado) "faltou no diário: $esperado`n$texto"
+        }
     }
 }
 
@@ -273,6 +284,7 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
     foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'extrair_minecraft.ps1') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
     Verdade (-not (Test-Path "$casa\.claude-monitor\install.js")) 'install.js sobrou na pasta'
     Igual $versao ([IO.File]::ReadAllText("$casa\.claude-monitor\versao-janelinha")) 'versão marcada'
+    Verdade ((Get-Content "$casa\.claude-monitor\janelinha.log" -Raw) -match "\[instalador \d+\] copiou a janelinha $([regex]::Escape($versao))") 'não anotou no diário da janelinha'
     $hooks = (Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks
     foreach ($e in 'UserPromptSubmit', 'Stop', 'Notification', 'SessionEnd') { Verdade (@($hooks.$e).Count -eq 1) "hook $e" }
 }

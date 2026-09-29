@@ -59,6 +59,8 @@ try {
 } finally { $zip.Dispose() }
 # a extensão só recopia quando a versão muda
 [IO.File]::WriteAllText((Join-Path $pasta 'versao-janelinha'), $versao)
+# no diário da janelinha (ela se reabre ao ver o arquivo mudar)
+[IO.File]::AppendAllText((Join-Path $pasta 'janelinha.log'), "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [instalador $PID] copiou a janelinha $versao`r`n")
 Ok $pasta
 
 Passo 'Ligando o Claude Code na extensão (hooks)'

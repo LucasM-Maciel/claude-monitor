@@ -107,6 +107,20 @@ const JANELINHA = {
 };
 const BINARIO_MAC = path.join(sessions_1.MONITOR_DIR, "ClaudeMonitor");
 let janelinhaAberta = false; // com ela aberta quem toca o som é ela
+/** Diário da janelinha (a do Windows também anota nele): quem copiou, quem abriu. */
+function anotar(texto) {
+    const diario = path.join(sessions_1.MONITOR_DIR, "janelinha.log");
+    try {
+        if (fs.existsSync(diario) && fs.statSync(diario).size > 256 * 1024)
+            fs.renameSync(diario, `${diario}.1`);
+        const d = new Date();
+        const hora = `${d.toLocaleString("sv-SE")}.${String(d.getMilliseconds()).padStart(3, "0")}`;
+        fs.appendFileSync(diario, `${hora} [${vscode.env.appName ?? "extensão"} ${process.pid}] ${texto}${require("os").EOL}`);
+    }
+    catch {
+        // sem diário, segue
+    }
+}
 function janelinhaLigada() {
     return !!JANELINHA[process.platform] && vscode.workspace.getConfiguration("claudeMonitor").get("overlay", true);
 }
@@ -137,6 +151,7 @@ function copiarJanelinha(context) {
         fs.utimesSync(destino, agora, agora);
     }
     fs.writeFileSync(marca, versao);
+    anotar(`copiou a janelinha ${versao} (antes: ${copiada || "nenhuma"})`);
 }
 /** Mac: compila overlay.swift quando o binário não existe ou ficou mais velho que ele. */
 function compilarMac() {
@@ -167,6 +182,7 @@ async function abrirJanelinha() {
         // via "cmd start": powershell aberto direto com detached morre na hora.
         // overlay.ps1 garante uma só.
         (0, child_process_1.spawn)("cmd.exe", ["/c", "start", '""', "/min", "powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+        anotar("mandou abrir a janelinha");
         janelinhaAberta = true;
     }
     else if (process.platform === "darwin") {

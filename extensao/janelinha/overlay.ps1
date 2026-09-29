@@ -14,15 +14,36 @@
 # arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra.
 param([string]$Foto, [string]$Pasta, [string]$ArquivoUso)
 Add-Type -AssemblyName PresentationFramework
+if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
+
+# diário em janelinha.log: quem abriu, quem desistiu, quando se reabriu, erros.
+# Às vezes ela some ao atualizar e não se sabe por quê. O -Foto não anota.
+$diario = Join-Path $Pasta 'janelinha.log'
+function Anotar($t) {
+    if ($Foto) { return }
+    try {
+        if ((Test-Path -LiteralPath $diario) -and (Get-Item -LiteralPath $diario).Length -gt 256KB) { Move-Item -LiteralPath $diario "$diario.1" -Force }
+        [IO.File]::AppendAllText($diario, "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [$PID] $($t -replace '\s*[\r\n]+\s*', ' ')`r`n", [Text.UTF8Encoding]::new($false))
+    } catch {}
+}
+function Hora($utc) { if ($utc) { $utc.ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss.fff') } else { 'sumiu' } }
+# quem me abriu: extensão (cmd, que já saiu), instalador, atalho (explorer) ou a janelinha velha
+function Pai {
+    try {
+        $id = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
+        $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+        "pai $id $(if ($p) { $p.ProcessName } else { '(já saiu)' })"
+    } catch { 'pai ?' }
+}
 
 if (-not $Foto) {
     $primeira = $false
     $mutex = [Threading.Mutex]::new($true, 'ClaudeMonitorOverlay', [ref]$primeira)
-    if (-not $primeira) { exit }
+    # solta o handle antes de anotar: enquanto ele existir, a que está se reabrindo acha que já tem uma
+    if (-not $primeira) { $mutex.Dispose(); Anotar "saiu: já tem uma aberta ($(Pai))"; exit }
 }
 $versao = (Get-Item -LiteralPath $PSCommandPath).LastWriteTimeUtc
-
-if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
+Anotar "abriu: arquivo de $(Hora $versao) ($(Pai))"
 $dir = Join-Path $Pasta 'sessions'
 $cred = Join-Path $HOME '.claude\.credentials.json'
 # situação da sessão (ver Situacao) -> cor da bolinha e texto do tooltip
@@ -522,18 +543,25 @@ $win.Add_MouseLeftButtonDown({
 })
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = 'Fechar'
-$fechar.Add_Click({ $win.Close() })
+$fechar.Add_Click({ Anotar 'fechada pelo menu'; $win.Close() })
+# só anota: o erro segue o caminho de sempre
+$win.Dispatcher.Add_UnhandledException({ Anotar "erro: $($_.Exception.Message)" })
 $win.ContextMenu = New-Object Windows.Controls.ContextMenu
 [void]$win.ContextMenu.Items.Add($fechar)
 
 # a extensão trocou este arquivo por uma versão nova: solta a vaga e abre a nova
 function SeAtualizou {
-    if ($Foto -or (Get-Item -LiteralPath $PSCommandPath).LastWriteTimeUtc -eq $versao) { return }
+    if ($Foto) { return }
+    $agora = (Get-Item -LiteralPath $PSCommandPath).LastWriteTimeUtc
+    if ($agora -eq $versao) { return }
     $timer.Stop()
-    # fecha o handle, não só solta: enquanto existir handle, a nova acha que já tem uma aberta
-    $mutex.ReleaseMutex()
-    $mutex.Dispose()
-    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Pasta', "`"$Pasta`""
+    try {
+        # fecha o handle, não só solta: enquanto existir handle, a nova acha que já tem uma aberta
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
+        $nova = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Pasta', "`"$Pasta`""
+        Anotar "arquivo mudou ($(Hora $versao) -> $(Hora $agora)): reabri como [$($nova.Id)]"
+    } catch { Anotar "erro ao reabrir: $_"; throw }
     $win.Close()
 }
 
@@ -566,3 +594,4 @@ if ($Foto) {
 
 Atualizar
 [void]$win.ShowDialog()
+Anotar "fechou ($($Error.Count) erros$(if ($Error.Count) { "; último: $($Error[0])" }))"

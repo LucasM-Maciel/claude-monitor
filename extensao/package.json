@@ -2,7 +2,7 @@
 	"name": "claude-monitor",
 	"displayName": "Claude Monitor",
 	"description": "Janelinha sempre por cima com as sessões do Claude Code (trabalhando / terminou / pergunta / permissão), o seu usage de 5h e 7 dias e o Clawd andando em volta. No VS Code: lista das sessões com clique pra ir na certa.",
-	"version": "0.4.3",
+	"version": "0.4.4",
 	"publisher": "local",
 	"license": "UNLICENSED",
 	"engines": {

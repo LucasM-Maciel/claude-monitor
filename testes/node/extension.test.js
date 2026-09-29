@@ -131,6 +131,9 @@ test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", asyn
     assert.strictEqual(s.cmd, "cmd.exe");
     assert.ok(s.args.includes(path.join(pasta, "overlay.ps1")));
     assert.ok(s.args.includes("Bypass"), "sem ExecutionPolicy Bypass o PowerShell recusa o script");
+    const diario = fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8");
+    assert.match(diario, new RegExp(`copiou a janelinha ${manifesto.version} \\(antes: nenhuma\\)`));
+    assert.match(diario, /mandou abrir a janelinha/);
 });
 
 test("Mac: copia o .swift, compila com swift 5 e abre o binário", async () => {
@@ -186,6 +189,16 @@ test("versão nova da extensão troca o overlay (e a janelinha aberta se reabre)
     await ativar({ casa, versao: "99.0.0" });
     assert.doesNotMatch(fs.readFileSync(path.join(pasta, "overlay.ps1"), "utf8"), /versão velha/);
     assert.strictEqual(fs.readFileSync(path.join(pasta, "versao-janelinha"), "utf8"), "99.0.0");
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), new RegExp(`copiou a janelinha 99\\.0\\.0 \\(antes: ${manifesto.version.replace(/\./g, "\\.")}\\)`));
+});
+
+test("diário da janelinha passou de 256 KB: vira .1 e começa de novo", async () => {
+    const { casa, pasta } = await ativar();
+    fs.writeFileSync(path.join(pasta, "janelinha.log"), "x".repeat(300 * 1024));
+    desativar();
+    await ativar({ casa });
+    assert.strictEqual(fs.statSync(path.join(pasta, "janelinha.log.1")).size, 300 * 1024);
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /^\S+ \S+ \[\S+ \d+\] mandou abrir a janelinha\r?\n$/);
 });
 
 test("arquivo da janelinha apagado volta na próxima abertura", async () => {
