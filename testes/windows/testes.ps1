@@ -74,7 +74,35 @@ public static class Pixels {
     }
 }
 '@
-Add-Type -AssemblyName System.IO.Compression.FileSystem, System.Drawing
+Add-Type -AssemblyName System.IO.Compression.FileSystem, System.Drawing, System.Windows.Forms
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Janelas {
+    delegate bool Cada(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(Cada cb, IntPtr l);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr depois, int x, int y, int cx, int cy, uint f);
+    // a janela visível do processo (a da janelinha é a única: o console vem escondido)
+    public static IntPtr DoProcesso(int pid) {
+        IntPtr achou = IntPtr.Zero;
+        EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) { achou = h; return false; } return true; }, IntPtr.Zero);
+        return achou;
+    }
+    // janelas visíveis sem "sempre por cima" na frente de h
+    public static int NormaisAcima(IntPtr h) {
+        int n = 0;
+        for (IntPtr w = GetWindow(h, 3); w != IntPtr.Zero; w = GetWindow(w, 3))
+            if (IsWindowVisible(w) && (GetWindowLong(w, -20) & 0x8) == 0) n++;
+        return n;
+    }
+    // põe h logo abaixo de outra janela (sem mover nem ativar)
+    public static void Abaixo(IntPtr h, IntPtr de) { SetWindowPos(h, de, 0, 0, 0, 0, 0x13); }
+}
+'@
 
 Write-Host "PowerShell $($PSVersionTable.PSVersion)"
 if ($PSVersionTable.PSVersion.Major -ne 5) { Write-Host '  (atenção: os amigos rodam o 5.1; rode com powershell.exe)' -ForegroundColor Yellow }
@@ -173,6 +201,19 @@ if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto
         $m.Dispose()
         $segunda = & $abrir
         Verdade ($segunda.WaitForExit(15000)) 'a 2ª janelinha não desistiu (ficariam duas)'
+        # "sempre por cima" quebrado (visto de verdade): janela normal na frente; em até 2 s ela volta pro topo
+        $hj = [IntPtr]::Zero
+        for ($i = 0; $i -lt 40 -and $hj -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 250; $hj = [Janelas]::DoProcesso($primeira.Id) }
+        Verdade ($hj -ne [IntPtr]::Zero) 'não achei a janela da janelinha'
+        $normal = New-Object Windows.Forms.Form -Property @{ ShowInTaskbar = $false; StartPosition = 'Manual'; Location = [Drawing.Point]::new(-3000, 0) }
+        $normal.Show()
+        try {
+            [Janelas]::Abaixo($hj, $normal.Handle)
+            Verdade ([Janelas]::NormaisAcima($hj) -gt 0) 'não consegui pôr uma janela normal na frente dela'
+            # DoEvents: janela sem resposta por 5 s vira "fantasma" do Windows
+            for ($i = 0; $i -lt 30 -and [Janelas]::NormaisAcima($hj) -gt 0; $i++) { [Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 200 }
+            Verdade ([Janelas]::NormaisAcima($hj) -eq 0) 'ficou atrás da janela normal'
+        } finally { $normal.Close() }
         (Get-Item $copia).LastWriteTimeUtc = [DateTime]::UtcNow
         Verdade ($primeira.WaitForExit(15000)) 'não percebeu que o arquivo mudou'
         $nova = $null
@@ -185,6 +226,7 @@ if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto
         $nova | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
         $texto = Ler $diario
         foreach ($esperado in "\[$($primeira.Id)\] abriu: arquivo de \S+ \S+ \(pai \d+ ", "\[$($segunda.Id)\] saiu: já tem uma aberta \(pai ",
+                             "\[$($primeira.Id)\] voltei pro topo: powershell \[$PID\] estava na frente",
                              "\[$($primeira.Id)\] arquivo mudou \(\S+ \S+ -> \S+ \S+\): reabri como \[$novaId\]",
                              "\[$novaId\] abriu: arquivo de ", "\[$($primeira.Id)\] fechou \(\d+ erros") {
             Verdade ($texto -match $esperado) "faltou no diário: $esperado`n$texto"

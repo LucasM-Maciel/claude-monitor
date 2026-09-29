@@ -549,6 +549,38 @@ $win.Dispatcher.Add_UnhandledException({ Anotar "erro: $($_.Exception.Message)" 
 $win.ContextMenu = New-Object Windows.Controls.ContextMenu
 [void]$win.ContextMenu.Items.Add($fechar)
 
+# "sempre por cima" às vezes quebra: o Windows deixa janela normal passar na frente
+# (visto 29/09: VS Code, Fotos e Opera na frente dela). Se tiver alguma, volta pro
+# topo sem roubar o foco. Só quando quebrou: senão brigaria com o menu Iniciar,
+# o recorte de tela e as outras "sempre por cima".
+if (-not $Foto) {
+    try {
+        Add-Type -Namespace ClaudeMonitor -Name Topo -MemberDefinition @'
+[DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+[DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr depois, int x, int y, int cx, int cy, uint f);
+// devolve o pid da 1ª janela normal (de outro processo) acima desta, depois de voltar pro topo; 0 = nada na frente
+public static uint Voltar(IntPtr h, uint eu) {
+    for (IntPtr w = GetWindow(h, 3); w != IntPtr.Zero; w = GetWindow(w, 3)) {  // 3 = a de cima
+        uint pid;
+        GetWindowThreadProcessId(w, out pid);
+        if (pid == eu || !IsWindowVisible(w) || (GetWindowLong(w, -20) & 0x8) != 0) continue;  // 0x8 = sempre por cima
+        SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x13);  // -1 = topo; 0x13 = sem mover, redimensionar nem ativar
+        return pid;
+    }
+    return 0;
+}
+'@
+    } catch { Anotar "sem o conserto do sempre por cima: $_" }
+}
+function NoTopo {
+    if (-not ('ClaudeMonitor.Topo' -as [type])) { return }
+    $na = [ClaudeMonitor.Topo]::Voltar((New-Object Windows.Interop.WindowInteropHelper $win).Handle, $PID)
+    if ($na) { Anotar "voltei pro topo: $((Get-Process -Id $na -ErrorAction Ignore).ProcessName) [$na] estava na frente" }
+}
+
 # a extensão trocou este arquivo por uma versão nova: solta a vaga e abre a nova
 function SeAtualizou {
     if ($Foto) { return }
@@ -567,7 +599,7 @@ function SeAtualizou {
 
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(2)
-$timer.Add_Tick({ Atualizar; Recolocar; SeAtualizou })
+$timer.Add_Tick({ Atualizar; Recolocar; NoTopo; SeAtualizou })
 $timer.Start()
 
 # teste: depois de desenhar, salva o PNG e, ao lado (.txt), o que viu; e fecha
