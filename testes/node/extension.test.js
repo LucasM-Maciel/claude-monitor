@@ -14,7 +14,7 @@ const manifesto = JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "u
 
 // --- VS Code de mentira ---
 function criarVscode(config) {
-    const r = { comandos: new Map(), mensagens: [], terminais: [], config: { ...config } };
+    const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], config: { ...config } };
     const msg = (tipo, respostas) => (texto, ...botoes) => {
         r.mensagens.push({ tipo, texto, botoes });
         return Promise.resolve(respostas?.[texto.slice(0, 40)]);
@@ -40,6 +40,7 @@ function criarVscode(config) {
             setStatusBarMessage: () => ({ dispose() {} }),
             createTerminal: (o) => { r.terminais.push(o); return { show() {} }; },
             createOutputChannel: () => ({ clear() {}, appendLine() {}, show() {} }),
+            registerUriHandler: (h) => { r.uri = h; return { dispose() {} }; },
         },
         workspace: {
             workspaceFolders: [],
@@ -50,10 +51,11 @@ function criarVscode(config) {
         },
         commands: {
             registerCommand: (id, fn) => { r.comandos.set(id, fn); return { dispose() {} }; },
-            executeCommand: async () => {},
+            executeCommand: async (...a) => { r.executados.push(a); },
         },
         env: { openExternal: async () => true },
     };
+    r.vscode = vscode;
     return { vscode, r };
 }
 
@@ -242,6 +244,20 @@ test("'Abrir janelinha' abre de novo", async () => {
     const { r } = await ativar();
     await r.comandos.get("claudeMonitor.openOverlay")();
     assert.strictEqual(spawns().length, 2);
+});
+
+test("clique na janelinha (vscode://local.claude-monitor/sessao?id=…) abre a aba da sessão", async () => {
+    const { r, pasta } = await ativar();
+    const projeto = path.join(os.tmpdir(), "projeto-do-clique");
+    r.vscode.workspace.workspaceFolders = [{ uri: { fsPath: projeto } }];
+    fs.writeFileSync(path.join(pasta, "sessions", "abc-123.json"), JSON.stringify({
+        name: "Minha sessão", cwd: path.join(projeto, "sub"), state: "working", pid: process.pid,
+        since: Date.now() / 1000, updated: Date.now() / 1000, entrypoint: "claude-vscode",
+    }));
+    await r.uri.handleUri({ query: "id=abc-123" });
+    assert.deepStrictEqual(r.executados.at(-1), ["claude-vscode.editor.open", "abc-123"]);
+    await r.uri.handleUri({ query: "id=nao-existe" });
+    assert.ok(r.mensagens.some((m) => m.texto.includes("já fechou")), JSON.stringify(r.mensagens));
 });
 
 test("'Usar sons do Minecraft' roda o script certo num terminal", async () => {

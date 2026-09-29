@@ -149,7 +149,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -159,6 +159,7 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Remove-Item "$foto*" -ErrorAction SilentlyContinue
         $argumentos = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', $overlay, '-Foto', $foto, '-Pasta', $pasta)
         if (Test-Path "$pasta\uso.json") { $argumentos += '-ArquivoUso', "$pasta\uso.json" }
+        if (Test-Path "$pasta\clicar.txt") { $argumentos += '-Clicar', [IO.File]::ReadAllText("$pasta\clicar.txt") }
         $r = Rodar powershell.exe $argumentos 60
         Verdade ($r.codigo -eq 0 -and (Test-Path "$foto.txt")) "a janelinha não terminou direito: $($r.saida)"
         Igual (Ler "$pasta\esperado.txt") (Ler "$foto.txt") 'o que a janelinha mostrou'

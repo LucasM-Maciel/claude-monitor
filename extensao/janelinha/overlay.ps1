@@ -6,13 +6,15 @@
 # pergunta/permissão e fica parado em cima quando nada roda.
 # Sons e picareta vêm do Minecraft, se ele estiver instalado (extrair_minecraft.ps1);
 # senão, sons do Windows e uma picareta desenhada aqui.
-# Arrastar: botão esquerdo. Duplo clique: traz o VS Code. Botão direito: "Fechar".
+# Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
+# traz o VS Code. Botão direito: "Fechar".
 # Passar o mouse numa sessão: o estado dela.
 # A extensão abre isto a cada janela do VS Code; o mutex deixa uma só. Quando a
 # extensão atualiza este arquivo, a janelinha se reabre sozinha com a versão nova.
 # Teste: -Foto arquivo.png desenha, salva e sai (sem internet: o usage vem de -ArquivoUso
-# arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra.
-param([string]$Foto, [string]$Pasta, [string]$ArquivoUso)
+# arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra; -Clicar id
+# clica na linha dessa sessão (o .txt diz o link que abriria).
+param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar)
 Add-Type -AssemblyName PresentationFramework
 if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
 
@@ -75,6 +77,7 @@ if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
     (Get-Content -LiteralPath "$Pasta\antes.json" -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $ultimo[$_.Name] = $_.Value }
 }
 $somDaVez = $null  # o último som decidido (o -Foto grava no .txt em vez de tocar)
+$cliqueDaVez = $null  # o link do último clique numa sessão (o -Foto grava no .txt em vez de abrir)
 $uso = @{ proxima = [DateTime]::MinValue; dados = $null }  # usage é buscado a cada 2 min
 if ($Foto) { $uso = @{ proxima = [DateTime]::MaxValue; dados = $(if ($ArquivoUso) { Get-Content $ArquivoUso -Raw | ConvertFrom-Json }) } }
 $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a picareta
@@ -308,6 +311,8 @@ function Atualizar {
         $linha = Linha $bola $nomeSessao $tempo
         $linha.Background = [Windows.Media.Brushes]::Transparent
         $linha.ToolTip = $rotulo
+        $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui
+        $linha.Cursor = [Windows.Input.Cursors]::Hand
         [void]$painelSessoes.Children.Add($linha)
     }
     # pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado
@@ -530,16 +535,32 @@ $win.Left = $lugar.x
 $win.Top = $lugar.y
 $win.Add_LocationChanged({ Recolocar })
 
-$win.Add_MouseLeftButtonDown({
-    if ($_.ClickCount -eq 2) {
-        $shell = New-Object -ComObject WScript.Shell
-        if (-not $shell.AppActivate('Visual Studio Code')) { [void]$shell.AppActivate('Cursor') }
-        return
+function TrazerVSCode {
+    $shell = New-Object -ComObject WScript.Shell
+    if (-not $shell.AppActivate('Visual Studio Code')) { [void]$shell.AppActivate('Cursor') }
+}
+# a sessão da linha nesse ponto da janela (a linha guarda "sessao:<id>" no Tag), ou nada
+function SessaoNoPonto($ponto) {
+    for ($e = [Windows.Media.VisualTreeHelper]::HitTest($win, $ponto).VisualHit; $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
+        if ("$($e.Tag)" -like 'sessao:*') { return "$($e.Tag)".Substring(7) }
     }
+}
+# a extensão recebe o link e abre a aba (ou o terminal) da sessão, como o clique na lista dela
+function AbrirSessao($id) {
+    $url = "vscode://local.claude-monitor/sessao?id=$([uri]::EscapeDataString($id))"
+    if ($Foto) { $script:cliqueDaVez = $url; return }
+    try { Start-Process $url -ErrorAction Stop } catch { Anotar "não abri $url ($_)"; TrazerVSCode }
+}
+$win.Add_MouseLeftButtonDown({
+    if ($_.ClickCount -eq 2) { TrazerVSCode; return }
+    # já na descida: durante o arrasto a lista pode se redesenhar
+    $sessao = SessaoNoPonto ($_.GetPosition($win))
     $lugar.arrastando = $true
     try { $win.DragMove() } finally { $lugar.arrastando = $false }
+    $clicou = [math]::Abs($win.Left - $lugar.x) -le 2 -and [math]::Abs($win.Top - $lugar.y) -le 2  # não arrastou
     $lugar.x = $win.Left
     $lugar.y = $win.Top
+    if ($clicou -and $sessao) { AbrirSessao $sessao }
 })
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = 'Fechar'
@@ -614,10 +635,17 @@ if ($Foto) {
         $png.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($imagem))
         $arquivo = [IO.File]::Create($Foto)
         try { $png.Save($arquivo) } finally { $arquivo.Dispose() }
+        # -Clicar: o meio da linha daquela sessão, pelo mesmo caminho do clique de verdade
+        $alvo = @($painelSessoes.Children | Where-Object { "$($_.Tag)" -eq "sessao:$Clicar" })[0]
+        if ($Clicar -and $alvo) {
+            $sessao = SessaoNoPonto ($alvo.TranslatePoint([Windows.Point]::new($alvo.ActualWidth / 2, $alvo.ActualHeight / 2), $win))
+            if ($sessao) { AbrirSessao $sessao }
+        }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
         }) + "clawd: $($passeio.modo)" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
-            "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })"
+            "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })" +
+            "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))
         $win.Close()
     })

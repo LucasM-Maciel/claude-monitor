@@ -70,6 +70,9 @@ sozinhas.
 
 ## Como usar
 
+- **Abrir uma sessão**: clique nela e o VS Code abre a aba (ou o terminal) dela.
+  Na 1ª vez o VS Code pergunta se deixa a extensão abrir o link: marque pra não
+  perguntar de novo. Funciona com o VS Code (com o Cursor, não).
 - **Mover**: clique e arraste.
 - **Ir pro VS Code**: duplo clique na janelinha.
 - **Fechar**: botão direito > Fechar.

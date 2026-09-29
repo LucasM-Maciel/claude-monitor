@@ -150,6 +150,7 @@ t_cenario() {
   rm -f "$foto" "$foto.txt"
   local extra=()
   [ -f "$pasta/uso.json" ] && extra=(--uso "$pasta/uso.json")
+  [ -f "$pasta/clicar.txt" ] && extra+=(--clicar "$(cat "$pasta/clicar.txt")")
   com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$foto" --pasta "$pasta" "${extra[@]}" \
     || falha "a janelinha não terminou direito" || return 1
   diff <(cat "$pasta/esperado.txt") <(cat "$foto.txt") || falha "o que a janelinha mostrou é diferente do esperado (acima)" || return 1
@@ -163,7 +164,7 @@ t_cenario() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 t_cores() {

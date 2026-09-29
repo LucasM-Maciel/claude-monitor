@@ -6,13 +6,15 @@
 // há pergunta/permissão e fica parado em cima quando nada roda.
 // Sons e picareta vêm do Minecraft, se tiver (extrair_minecraft.sh); senão, sons
 // do Mac e uma picareta desenhada aqui.
-// Arrastar: botão esquerdo. Duplo clique: traz o VS Code. Botão direito: "Fechar".
+// Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
+// traz o VS Code. Botão direito: "Fechar".
 // A extensão compila isto (xcrun swiftc -swift-version 5 -O -o ClaudeMonitor
 // overlay.swift) e abre; a trava em overlay.lock deixa uma só. Quando o binário
 // muda (versão nova), ela se reabre sozinha.
 // Teste: ClaudeMonitor --foto arquivo.png desenha, salva o PNG (e, ao lado, um
 // .txt com o que viu) e sai. Sem internet: o usage vem de --uso arquivo.json, se
-// passar. --pasta troca a ~/.claude-monitor por outra.
+// passar. --pasta troca a ~/.claude-monitor por outra. --clicar id clica na linha
+// dessa sessão (o .txt diz o link que abriria).
 import Cocoa
 
 let ambiente = ProcessInfo.processInfo.environment
@@ -321,6 +323,17 @@ func buscarUso() {
     }
 }
 
+// clique numa sessão: a extensão recebe o link e abre a aba (ou o terminal) dela,
+// como o clique na lista dela. Sem VS Code pra receber: só traz o editor.
+var cliqueDaVez: String?  // o --foto grava no .txt em vez de abrir
+let livresNaUrl = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")  // os do EscapeDataString do Windows
+func abrirSessao(_ id: String) {
+    let url = "vscode://local.claude-monitor/sessao?id=" + (id.addingPercentEncoding(withAllowedCharacters: livresNaUrl) ?? id)
+    if arquivoFoto != nil { cliqueDaVez = url; return }
+    if let u = URL(string: url), NSWorkspace.shared.open(u) { return }
+    trazerEditor()
+}
+
 func trazerEditor() {
     for id in ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92"]
     where !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty {
@@ -351,7 +364,7 @@ final class Raiz: NSView {
 }
 
 final class Cartao: NSView {
-    var linhas: [(cor: NSColor, nome: String, tempo: String, rotulo: String)] = []
+    var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String)] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
     override var isFlipped: Bool { true }
 
@@ -410,10 +423,34 @@ final class Cartao: NSView {
         }
     }
 
+    // a sessão da linha nesse ponto (coordenadas do cartão: linhas de 20 a partir de y = 6)
+    func sessaoNoPonto(_ p: NSPoint) -> String? {
+        guard bounds.contains(p), p.y >= 6 else { return nil }
+        let i = Int((p.y - 6) / 20)
+        return i < linhas.count ? linhas[i].id : nil
+    }
+
+    // arrasto na mão (o performDrag deixa o arrasto com o sistema e aí não dá pra
+    // saber se foi só um clique): andou menos de 3 pontos = clique
+    var inicioMouse = NSPoint.zero, inicioJanela = NSPoint.zero
+    var sessaoClicada: String?
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
+        sessaoClicada = nil
         if event.clickCount == 2 { trazerEditor(); return }
-        window?.performDrag(with: event)
+        inicioMouse = NSEvent.mouseLocation
+        inicioJanela = window?.frame.origin ?? .zero
+        // já na descida: durante o arrasto a lista pode se redesenhar
+        sessaoClicada = sessaoNoPonto(convert(event.locationInWindow, from: nil))
+    }
+    override func mouseDragged(with event: NSEvent) {
+        let m = NSEvent.mouseLocation
+        window?.setFrameOrigin(NSPoint(x: inicioJanela.x + m.x - inicioMouse.x, y: inicioJanela.y + m.y - inicioMouse.y))
+    }
+    override func mouseUp(with event: NSEvent) {
+        let m = NSEvent.mouseLocation
+        if let id = sessaoClicada, hypot(m.x - inicioMouse.x, m.y - inicioMouse.y) < 3 { abrirSessao(id) }
+        sessaoClicada = nil
     }
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
@@ -634,9 +671,9 @@ func atualizar() {
     let agora = Date().timeIntervalSince1970
     let sessoes = lerSessoes(agora: agora)
     avisar(sessoes)
-    cartao.linhas = sessoes.map { s -> (cor: NSColor, nome: String, tempo: String, rotulo: String) in
+    cartao.linhas = sessoes.map { s -> (id: String, cor: NSColor, nome: String, tempo: String, rotulo: String) in
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
-        return (cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo)
+        return (id: s.id, cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo)
     }
     buscarUso()
     cartao.arrumar()  // redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
@@ -647,9 +684,14 @@ func atualizar() {
                 : situacoes.contains("working") ? "andando" : "parado")
     palco.needsDisplay = true
     if let foto = arquivoFoto {
+        // --clicar: o meio da linha daquela sessão, pelo mesmo caminho do clique de verdade
+        if let alvo = argumento("--clicar"), let i = cartao.linhas.firstIndex(where: { $0.id == alvo }),
+           let id = cartao.sessaoNoPonto(NSPoint(x: cartao.bounds.midX, y: 6 + CGFloat(i) * 20 + 10)) {
+            abrirSessao(id)
+        }
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
             + ["clawd: \(palco.modo)", "usage: \(uso == nil ? "indisponivel" : "ok")",
-               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")"]
+               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
     seAtualizou()

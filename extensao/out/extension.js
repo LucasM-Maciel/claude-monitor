@@ -459,6 +459,17 @@ function activate(context) {
         seen.set(item.session.id, item.session.since);
         render();
     }), vscode.commands.registerCommand("claudeMonitor.refresh", tick), vscode.commands.registerCommand("claudeMonitor.debug", debugTerminals), vscode.commands.registerCommand("claudeMonitor.installHooks", runInstall), vscode.commands.registerCommand("claudeMonitor.openOverlay", abrirJanelinha), vscode.commands.registerCommand("claudeMonitor.minecraft", usarMinecraft));
+    // clique numa sessão da janelinha: vscode://local.claude-monitor/sessao?id=<id>
+    context.subscriptions.push(vscode.window.registerUriHandler({
+        async handleUri(uri) {
+            const { id } = Object.fromEntries(new URLSearchParams(uri.query));
+            const s = (await (0, sessions_1.readSessions)()).find((x) => x.id === id);
+            if (s)
+                await focusSession(s);
+            else
+                vscode.window.showWarningMessage("Claude Monitor: essa sessão já fechou.");
+        },
+    }));
     tick();
 }
 function deactivate() { }

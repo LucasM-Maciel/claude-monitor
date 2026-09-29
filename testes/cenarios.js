@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -96,6 +96,7 @@ function uso(cinco, sete) {
 let clawd;
 let temUso = false;
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup
+let clique = "nenhum";  // o link que o clique abriria (a sessão a clicar vai em clicar.txt)
 if (cenario === "misto") {
     sessao("renomeada", {
         estado: "working", mostra: ["Minha sessão renomeada", "working"],
@@ -204,6 +205,13 @@ if (cenario === "misto") {
     sessao("b", { estado: "waiting", antes: "working", mostra: ["Esperando você", "question"], linhas: [titulo("Esperando você"), texto("Posso seguir?")] });
     clawd = "pulando";
     som = "aldeao";
+} else if (cenario === "clique") {  // clique na do meio: acha a linha certa e manda o id dela
+    sessao("0a1b-primeira", { estado: "waiting", mostra: ["Primeira", "finished"], linhas: [titulo("Primeira"), texto("Feito.")] });
+    sessao("2c3d-meio", { estado: "working", mostra: ["A do meio", "working"], linhas: [titulo("A do meio"), ferramenta("Bash")] });
+    sessao("4e5f-ultima", { estado: "waiting", mostra: ["Última", "finished"], linhas: [titulo("Última"), texto("Pronto.")] });
+    fs.writeFileSync(path.join(pasta, "clicar.txt"), "2c3d-meio");
+    clique = "vscode://local.claude-monitor/sessao?id=2c3d-meio";
+    clawd = "andando";
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);
@@ -211,6 +219,6 @@ if (cenario === "misto") {
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
-linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`);
+linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `clique: ${clique}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");
 console.log(linhas.join("\n"));
