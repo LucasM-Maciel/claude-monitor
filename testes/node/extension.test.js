@@ -13,11 +13,11 @@ const RAIZ = path.join(__dirname, "..", "..", "extensao");
 const manifesto = JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf8"));
 
 // --- VS Code de mentira ---
-function criarVscode(config) {
-    const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], config: { ...config } };
+function criarVscode(config, { clicar, focada }) {
+    const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], abertos: [], config: { ...config } };
     const msg = (tipo, respostas) => (texto, ...botoes) => {
         r.mensagens.push({ tipo, texto, botoes });
-        return Promise.resolve(respostas?.[texto.slice(0, 40)]);
+        return Promise.resolve(botoes.includes(clicar) ? clicar : respostas?.[texto.slice(0, 40)]);
     };
     const vscode = {
         EventEmitter: class { constructor() { this.event = () => ({ dispose() {} }); } fire() {} },
@@ -30,7 +30,7 @@ function criarVscode(config) {
         ConfigurationTarget: { Global: 1 },
         Uri: { file: (p) => ({ fsPath: p }), parse: (u) => ({ toString: () => u }) },
         window: {
-            state: { focused: true },
+            state: { focused: focada },
             terminals: [],
             createTreeView: () => ({ dispose() {} }),
             createStatusBarItem: () => ({ show() {}, dispose() {} }),
@@ -53,7 +53,7 @@ function criarVscode(config) {
             registerCommand: (id, fn) => { r.comandos.set(id, fn); return { dispose() {} }; },
             executeCommand: async (...a) => { r.executados.push(a); },
         },
-        env: { openExternal: async () => true },
+        env: { openExternal: async (u) => { r.abertos.push(u.toString()); return true; } },
     };
     r.vscode = vscode;
     return { vscode, r };
@@ -79,12 +79,21 @@ cp.execFile = (cmd, args, opcoes, cb) => {
     return {};
 };
 
+// --- GitHub de mentira: a última release publicada (null = sem internet) ---
+let publicada = null;
+let consultas = 0;
+global.fetch = async () => {
+    consultas++;
+    if (!publicada) throw new Error("sem internet");
+    return { ok: true, json: async () => ({ tag_name: publicada }) };
+};
+
 const plataformaReal = process.platform;
 let ativa;  // { ext, contexto }
 let modLoad = Module._load;
 
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
-async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true } = {}) {
+async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true } = {}) {
     casa ??= fs.mkdtempSync(path.join(os.tmpdir(), "cm-ext-"));
     process.env.HOME = casa;
     process.env.USERPROFILE = casa;
@@ -99,7 +108,7 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
         }));
     }
     processos = [];
-    const { vscode, r } = criarVscode(config);
+    const { vscode, r } = criarVscode(config, { clicar, focada });
     Module._load = function (pedido, ...resto) {
         return pedido === "vscode" ? vscode : modLoad.call(this, pedido, ...resto);
     };
@@ -219,6 +228,52 @@ test("versão instalada igual ou mais velha: não oferece recarregar", async () 
         await r.comandos.get("claudeMonitor.refresh")();
         assert.strictEqual(r.mensagens.some((m) => m.texto.includes("atualizou")), avisa, `${rodando} rodando, ${instalada} instalada`);
         desativar();
+    }
+});
+
+test("versão nova no GitHub: oferece baixar o zip (com o COMO ATUALIZAR), 1x por dia entre as janelas", async () => {
+    publicada = "v99.0.0";
+    try {
+        const { r, casa } = await ativar({ clicar: "Baixar" });
+        const aviso = r.mensagens.find((m) => m.texto.includes("disponível"));
+        assert.ok(aviso, JSON.stringify(r.mensagens));
+        assert.match(aviso.texto, /99\.0\.0.*COMO ATUALIZAR\.txt/);
+        assert.deepStrictEqual(aviso.botoes, ["Baixar"]);
+        assert.deepStrictEqual(r.abertos, ["https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"]);
+        desativar();
+        consultas = 0;
+        const outra = await ativar({ casa });  // outra janela, no mesmo dia
+        assert.strictEqual(consultas, 0, "perguntou pro GitHub de novo no mesmo dia");
+        assert.ok(!outra.r.mensagens.some((m) => m.texto.includes("disponível")));
+    } finally {
+        publicada = null;
+    }
+});
+
+test("GitHub sem versão nova, sem internet ou janela sem foco: fica quieto", async () => {
+    try {
+        for (const [tag, focada, perguntou] of [[`v${manifesto.version}`, true, 1], ["v0.0.1", true, 1], [null, true, 1], ["v99.0.0", false, 0]]) {
+            publicada = tag;
+            consultas = 0;
+            const { r } = await ativar({ focada });
+            assert.strictEqual(consultas, perguntou, `tag=${tag} focada=${focada}`);
+            assert.ok(!r.mensagens.some((m) => m.texto.includes("disponível")), `tag=${tag} focada=${focada}`);
+            desativar();
+        }
+    } finally {
+        publicada = null;
+    }
+});
+
+test("sem internet não conta como consultado: tenta de novo", async () => {
+    const { casa } = await ativar();  // publicada = null
+    desativar();
+    publicada = "v99.0.0";
+    try {
+        const { r } = await ativar({ casa });
+        assert.ok(r.mensagens.some((m) => m.texto.includes("disponível")), JSON.stringify(r.mensagens));
+    } finally {
+        publicada = null;
     }
 });
 

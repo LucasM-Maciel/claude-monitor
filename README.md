@@ -68,9 +68,11 @@ Pronto: a janelinha aparece no canto de baixo à direita. As sessões do Claude
 que já estavam abertas precisam ser reabertas pra aparecer; as novas aparecem
 sozinhas.
 
-**Pra atualizar**, repita os passos com o zip novo. Se o VS Code estiver aberto,
-ele avisa "Claude Monitor atualizou" com o botão **Recarregar**: clique quando
-nenhum Claude estiver trabalhando nele.
+**Pra atualizar**: quando sai versão nova, o VS Code avisa "Claude Monitor X
+disponível" com o botão **Baixar**. Baixe, extraia e siga o `COMO ATUALIZAR.txt`
+que vem no zip (é instalar de novo por cima). Depois o VS Code avisa "Claude
+Monitor atualizou" com o botão **Recarregar**: clique quando nenhum Claude
+estiver trabalhando nele.
 
 ## Como usar
 

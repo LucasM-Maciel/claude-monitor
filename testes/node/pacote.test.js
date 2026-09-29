@@ -102,6 +102,7 @@ test("ClaudeMonitor.zip tem tudo, com o instalador do Mac executável", { skip: 
     const lista = await entradas(path.join(DIST, "ClaudeMonitor.zip"));
     const nomes = lista.map((e) => e.nome).sort();
     assert.deepStrictEqual(nomes, [
+        "ClaudeMonitor/COMO ATUALIZAR.txt",
         "ClaudeMonitor/COMO INSTALAR.txt",
         `ClaudeMonitor/arquivos/claude-monitor-${manifesto.version}.vsix`,
         "ClaudeMonitor/arquivos/instalar-windows.ps1",

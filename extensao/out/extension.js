@@ -180,6 +180,42 @@ function conferirAtualizacao(versao) {
             vscode.commands.executeCommand("workbench.action.reloadWindow");
     });
 }
+const REPO = "LucasM-Maciel/ticlins-claude-monitor";
+/**
+ * Os amigos instalam pelo zip e não ficam sabendo de versão nova: 1x por dia
+ * (entre todas as janelas: ~/.claude-monitor/consulta-versao) pergunta a última
+ * release pro GitHub e, se for mais nova, oferece baixar o zip, que traz o
+ * COMO ATUALIZAR.txt. Só na janela focada, pra alguém ver. Sem internet, fica
+ * quieto e tenta de novo na próxima hora.
+ */
+async function conferirPublicada(versao) {
+    if (!vscode.window.state.focused)
+        return;
+    const marca = path.join(sessions_1.MONITOR_DIR, "consulta-versao");
+    try {
+        if (Date.now() - fs.statSync(marca).mtimeMs < 24 * 3600 * 1000)
+            return;
+    }
+    catch {
+        // nunca consultou
+    }
+    let publicada;
+    try {
+        const resposta = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { "User-Agent": "claude-monitor" }, signal: AbortSignal.timeout(15000) });
+        if (!resposta.ok)
+            return;
+        publicada = String((await resposta.json()).tag_name ?? "").replace(/^v/, "");
+        fs.writeFileSync(marca, publicada);
+    }
+    catch {
+        return;
+    }
+    if (publicada.localeCompare(versao, undefined, { numeric: true }) <= 0)
+        return;
+    const escolha = await vscode.window.showInformationMessage(`Claude Monitor ${publicada} disponível (você tem a ${versao}). Baixe, extraia e siga o COMO ATUALIZAR.txt que vem dentro.`, "Baixar");
+    if (escolha === "Baixar")
+        vscode.env.openExternal(vscode.Uri.parse(`https://github.com/${REPO}/releases/latest/download/ClaudeMonitor.zip`));
+}
 /** Mac: compila overlay.swift quando o binário não existe ou ficou mais velho que ele. */
 function compilarMac() {
     const fonte = path.join(sessions_1.MONITOR_DIR, "overlay.swift");
@@ -483,6 +519,11 @@ function activate(context) {
     }
     const interval = setInterval(tick, POLL_MS);
     context.subscriptions.push({ dispose: () => clearInterval(interval) });
+    // versão nova publicada: agora e de hora em hora (a consulta mesmo é 1x por dia)
+    const versao = context.extension.packageJSON.version;
+    conferirPublicada(versao);
+    const consulta = setInterval(() => conferirPublicada(versao), 3600 * 1000);
+    context.subscriptions.push({ dispose: () => clearInterval(consulta) });
     context.subscriptions.push(vscode.commands.registerCommand("claudeMonitor.focusSession", focusSession), vscode.commands.registerCommand("claudeMonitor.markSeen", (item) => {
         seen.set(item.session.id, item.session.since);
         render();
