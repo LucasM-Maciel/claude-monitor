@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Not covered by this license:
-
-- extensao/janelinha/vorbis.min.js keeps its own licenses (MIT, LGPL, BSD),
-  listed in extensao/janelinha/vorbis-licencas.txt.
-- Minecraft sounds and textures belong to Mojang. None of them are in this
-  repository: each installation downloads them from Mojang's own servers.

@@ -164,5 +164,6 @@ A cada push, o GitHub testa o pacote num Mac e num Windows de verdade. Uma tag
 ## Licença
 
 [MIT](LICENSE): pode usar, copiar e mudar à vontade, sem garantia nenhuma (use
-por sua conta). Claude é marca da Anthropic; Minecraft, os sons e as texturas
-são da Mojang.
+por sua conta). Ficam de fora o `extensao/janelinha/vorbis.min.js`, com as
+licenças dele em `vorbis-licencas.txt`, e os sons e texturas do Minecraft, que
+são da Mojang e não estão no repositório. Claude é marca da Anthropic.
