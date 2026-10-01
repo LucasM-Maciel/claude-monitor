@@ -9,6 +9,9 @@ você, ela avisa com um som.
 
 **[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows e Mac no mesmo arquivo)
 
+> Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude) nem com a
+> Mojang (Minecraft).
+
 ## O que ela mostra
 
 | Bolinha | Quer dizer |
@@ -157,3 +160,9 @@ bash testes/mac/testes.sh                                            # Mac
 
 A cada push, o GitHub testa o pacote num Mac e num Windows de verdade. Uma tag
 `v*` publica o .zip na página de download.
+
+## Licença
+
+[MIT](LICENSE): pode usar, copiar e mudar à vontade, sem garantia nenhuma (use
+por sua conta). Claude é marca da Anthropic; Minecraft, os sons e as texturas
+são da Mojang.
