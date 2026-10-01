@@ -83,6 +83,17 @@ test("pedido de permissão vira 'permission' (pela mensagem, pelo tipo e por eli
     }
 });
 
+test("2º pedido de permissão seguido reinicia o relógio (senão o transcript do trabalho entre os dois vira 'working')", () => {
+    const casa = casaNova();
+    const pedido = { session_id: "s1", cwd: casa, notification_type: "permission_prompt", message: "x" };
+    rodar(casa, "notification", pedido);
+    const antes = sessao(casa, "s1").since;
+    rodar(casa, "notification", pedido);  // aprovou o 1º, ela trabalhou e pediu de novo: nenhum hook no meio
+    const s = sessao(casa, "s1");
+    assert.strictEqual(s.state, "permission");
+    assert.ok(s.since > antes, `since ${s.since} devia passar de ${antes}`);
+});
+
 test("SessionEnd apaga a sessão", () => {
     const casa = casaNova();
     rodar(casa, "working", { session_id: "s1", cwd: casa });

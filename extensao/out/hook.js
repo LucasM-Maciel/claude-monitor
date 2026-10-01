@@ -146,8 +146,11 @@ function main() {
     const state = event === "notification" ? notificationState(data) : event;
     const now = Date.now() / 1000;
     // mesmo estado de antes (ex.: aviso de ociosidade depois do Stop) não
-    // reinicia o relógio do "esperando há X"
-    const since = previous.state === state && previous.since ? previous.since : now;
+    // reinicia o relógio do "esperando há X". Permissão sempre reinicia: aprovar
+    // não dispara hook, então 2 pedidos seguidos chegam como permission ->
+    // permission, e o since velho fazia o transcript do trabalho entre os dois
+    // contar como "voltou a trabalhar" (verde no lugar do amarelo).
+    const since = previous.state === state && previous.since && state !== "permission" ? previous.since : now;
     const cwd = data.cwd || "";
     const transcript = data.transcript_path || "";
     const name = getTitle(transcript, sessionId) || path.basename(cwd.replace(/[\\/]+$/, "")) || sessionId.slice(0, 8);
