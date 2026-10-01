@@ -102,8 +102,8 @@ class SessionsProvider {
 // Windows: overlay.ps1 (PowerShell/WPF, já vem no Windows). Mac: overlay.swift,
 // compilado aqui na 1ª vez (precisa das ferramentas de linha de comando da Apple).
 const JANELINHA = {
-    win32: ["overlay.ps1", "extrair_minecraft.ps1"],
-    darwin: ["overlay.swift", "extrair_minecraft.sh"],
+    win32: ["overlay.ps1", "minecraft.js", "vorbis.min.js"],
+    darwin: ["overlay.swift", "minecraft.js", "vorbis.min.js"],
 };
 const BINARIO_MAC = path.join(sessions_1.MONITOR_DIR, "ClaudeMonitor");
 let janelinhaAberta = false; // com ela aberta quem toca o som é ela
@@ -271,14 +271,47 @@ async function abrirJanelinha() {
         janelinhaAberta = true;
     }
 }
-/** Sons e picareta do Minecraft instalado; roda num terminal pra ver o que aconteceu. */
-function usarMinecraft() {
-    const win = process.platform === "win32";
-    const script = path.join(sessions_1.MONITOR_DIR, win ? "extrair_minecraft.ps1" : "extrair_minecraft.sh");
-    const terminal = win
-        ? vscode.window.createTerminal({ name: "Claude Monitor — Minecraft", shellPath: "powershell.exe", shellArgs: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script] })
-        : vscode.window.createTerminal({ name: "Claude Monitor — Minecraft", shellPath: "/bin/bash", shellArgs: [script] });
-    terminal.show();
+/** Sons e texturas do Minecraft, do servidor da Mojang (não precisa do jogo nem do ffmpeg). */
+function baixarMinecraft() {
+    return require(path.join(__dirname, "..", "janelinha", "minecraft.js")).baixarTudo({ destino: sessions_1.MONITOR_DIR });
+}
+/** Comando "Usar sons do Minecraft": baixa de novo, com o andamento na tela. */
+async function usarMinecraft() {
+    try {
+        const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Claude Monitor: baixando os sons do Minecraft..." }, baixarMinecraft);
+        anotar(`baixou os sons do Minecraft ${r.versao} (${r.sons} sons, ${r.texturas} texturas)`);
+        if (r.sons)
+            vscode.window.showInformationMessage(`Claude Monitor: pronto, a janelinha está com os sons do Minecraft ${r.versao}.`);
+        else
+            vscode.window.showWarningMessage("Claude Monitor: não veio nenhum som do Minecraft; a janelinha segue com os sons do sistema.");
+    }
+    catch (err) {
+        anotar(`não baixei os sons do Minecraft: ${err.message}`);
+        vscode.window.showWarningMessage(`Claude Monitor: não consegui falar com o servidor da Mojang (${err.message}). Sem internet? Tente de novo depois.`);
+    }
+}
+/**
+ * Quem atualiza sem o instalador (ou instalou sem internet) fica sem os sons do
+ * Minecraft: a extensão baixa sozinha, calada. Se falhar, tenta de novo em 6 h.
+ */
+function garantirMinecraft() {
+    if (fs.existsSync(path.join(sessions_1.MONITOR_DIR, "sons", "levelup.wav")))
+        return;
+    const marca = path.join(sessions_1.MONITOR_DIR, "tentativa-minecraft");
+    try {
+        if (Date.now() - fs.statSync(marca).mtimeMs < 6 * 3600 * 1000)
+            return;
+    }
+    catch {
+        // nunca tentou
+    }
+    try {
+        fs.writeFileSync(marca, "");
+    }
+    catch {
+        return;
+    }
+    baixarMinecraft().then((r) => anotar(`baixou os sons do Minecraft ${r.versao} sozinha (${r.sons} sons, ${r.texturas} texturas)`), (err) => anotar(`não baixei os sons do Minecraft: ${err.message}`));
 }
 /** Os hooks rodam `node`: sem Node.js instalado o Claude Code não avisa ninguém. */
 async function conferirNode() {
@@ -426,6 +459,7 @@ function activate(context) {
     }
     if (janelinhaLigada())
         abrirJanelinha();
+    garantirMinecraft();
     if ((0, install_1.hooksInstalled)())
         conferirNode();
     else {

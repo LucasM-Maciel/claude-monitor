@@ -1,5 +1,5 @@
 ﻿# Instala o Claude Monitor no Windows: a extensão no VS Code/Cursor, os hooks no
-# Claude Code, a janelinha e, se tiver Minecraft, os sons e a picareta do jogo.
+# Claude Code, a janelinha e os sons e texturas do Minecraft (do servidor da Mojang).
 # Quem chama é o instalar-windows.cmd (duplo clique). Rodar de novo não estraga:
 # reinstala por cima.
 # Testes: -SemAtalho (não cria atalho na Área de Trabalho), -SemAbrir (não abre a janelinha).
@@ -49,7 +49,7 @@ $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
     $copias = @{
         'out/hook.js' = $pasta; 'out/processes.js' = $pasta; 'out/install.js' = $temp
-        'janelinha/overlay.ps1' = $pasta; 'janelinha/extrair_minecraft.ps1' = $pasta
+        'janelinha/overlay.ps1' = $pasta; 'janelinha/minecraft.js' = $pasta; 'janelinha/vorbis.min.js' = $pasta
     }
     foreach ($nome in $copias.Keys) {
         $entrada = $zip.GetEntry("extension/$nome")
@@ -82,8 +82,9 @@ if ($node) {
 }
 Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue
 
-Passo 'Minecraft (opcional)'
-& (Join-Path $pasta 'extrair_minecraft.ps1')
+Passo 'Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)'
+if ($node) { & $node (Join-Path $pasta 'minecraft.js') }
+else { Aviso 'Sem Node.js a janelinha fica com os sons do Windows.' }
 
 if (-not $SemAtalho) {
     Passo 'Atalho "Claude Monitor" na Área de Trabalho (reabre a janelinha)'

@@ -61,13 +61,18 @@ for e in code cursor; do
 done
 PATH_TESTE="$BIN:$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
 MONITOR="$CASA/.claude-monitor"
-instalar() { env HOME="$CASA" PATH="$PATH_TESTE" bash "$PACOTE/instalar-mac.sh" --sem-abrir; }
+# servidor da Mojang de mentira (testes/mojang-falso.js), no ar até o fim: o instalador baixa dele
+node "$RAIZ/testes/mojang-falso.js" > "$TMP/mojang.txt" &
+MOJANG_PID=$!
+for _ in $(seq 1 100); do [ -s "$TMP/mojang.txt" ] && break; sleep 0.1; done
+MOJANG=$(head -1 "$TMP/mojang.txt")
+instalar() { env HOME="$CASA" PATH="$PATH_TESTE" CLAUDE_MONITOR_MOJANG="$MOJANG" bash "$PACOTE/instalar-mac.sh" --sem-abrir; }
 
 echo ""
 echo "Pacote"
 t_sintaxe() {
   local f
-  for f in "$RAIZ"/instalar/*.sh "$RAIZ"/extensao/janelinha/*.sh "$RAIZ"/testes/mac/*.sh "$PACOTE"/*.sh "$TMP"/vsix/extension/janelinha/*.sh; do
+  for f in "$RAIZ"/instalar/*.sh "$RAIZ"/testes/mac/*.sh "$PACOTE"/*.sh; do
     bash -n "$f" || falha "erro de sintaxe em $f" || return 1
   done
 }
@@ -86,9 +91,10 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js overlay.swift extrair_minecraft.sh ClaudeMonitor; do
+  for f in hook.js processes.js overlay.swift minecraft.js vorbis.min.js ClaudeMonitor; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
+  [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1
   [ -x "$MONITOR/ClaudeMonitor" ] || falha "janelinha não é executável" || return 1
   [ ! -f "$MONITOR/install.js" ] || falha "install.js sobrou na pasta" || return 1
   [ "$(cat "$MONITOR/versao-janelinha")" = "$VERSAO" ] || falha "versão marcada: $(cat "$MONITOR/versao-janelinha")" || return 1
@@ -211,64 +217,34 @@ t_uma_so() {
 teste "uma janelinha só, e ela vira a versão nova quando o binário muda" t_uma_so
 
 echo ""
-echo "Minecraft"
-MC="$CASA/Library/Application Support/minecraft"
-t_sem_mc() {
+echo "Minecraft (servidor da Mojang de mentira: testes/mojang-falso.js)"
+t_mc_baixa() {
+  local pasta="$TMP/mc1/.claude-monitor" saida f
+  mkdir -p "$pasta"
+  printf 'janelinha' > "$pasta/ClaudeMonitor"
+  touch -t 202001010000 "$pasta/ClaudeMonitor" "$TMP/2020"
+  saida=$(env HOME="$TMP/mc1" PATH="$PATH_TESTE" CLAUDE_MONITOR_MOJANG="$MOJANG" node "$MONITOR/minecraft.js" 2>&1) || falha "saiu com erro: $saida" || return 1
+  for f in xp1 xp2 xp3 levelup aldeao_hmm1 aldeao_hmm2 gato; do [ -f "$pasta/sons/$f.wav" ] || falha "falta $f.wav: $saida" || return 1; done
+  for f in picareta espada diamante pedra; do [ -f "$pasta/$f.png" ] || falha "falta $f.png: $saida" || return 1; done
+  # o Mac tem que entender os .wav (o NSSound da janelinha usa o mesmo leitor)
+  for f in "$pasta"/sons/*.wav; do afinfo "$f" >/dev/null 2>&1 || falha "o Mac não entende $(basename "$f")" || return 1; done
+  [ "$pasta/ClaudeMonitor" -nt "$TMP/2020" ] || falha "não cutucou a janelinha pra recarregar" || return 1
+  echo "$saida" | grep -q "Pronto!" || falha "$saida"
+}
+teste "baixa os sons e as texturas, sem Minecraft nem ffmpeg, e recarrega a janelinha" t_mc_baixa
+t_mc_sem_internet() {
   local saida
-  saida=$(env HOME="$CASA" PATH="$PATH_TESTE" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
-  echo "$saida" | grep -q "Minecraft Java não encontrado" || falha "$saida" || return 1
-  [ ! -f "$MONITOR/picareta.png" ] || falha "criou picareta do nada"
+  mkdir -p "$TMP/mc2"
+  if saida=$(env HOME="$TMP/mc2" CLAUDE_MONITOR_MOJANG="http://127.0.0.1:9" node "$MONITOR/minecraft.js" 2>&1); then
+    falha "devia sair com erro: $saida"
+    return 1
+  fi
+  echo "$saida" | grep -q 'Cmd+Shift+P > "Claude Monitor: Usar sons do Minecraft"' || falha "$saida" || return 1
+  [ ! -d "$TMP/mc2/.claude-monitor/sons" ] || falha "criou a pasta de sons sem ter som"
 }
-teste "sem Minecraft: avisa, não quebra e não cria nada" t_sem_mc
-# Minecraft de mentira: índice no formato do jogo, o jar certo e um jar de mod pra ignorar
-minecraft_falso() {
-  mkdir -p "$MC/assets/indexes" "$MC/versions/1.21.4" "$MC/versions/fabric-loader-1.21" "$TMP/jar/assets/minecraft/textures/item"
-  cp "$TMP/magenta.png" "$TMP/jar/assets/minecraft/textures/item/diamond_pickaxe.png"
-  (cd "$TMP/jar" && zip -q -r "$MC/versions/1.21.4/1.21.4.jar" assets && zip -q -r "$MC/versions/fabric-loader-1.21/outro-nome.jar" assets)
-  local objetos="" som hash
-  for som in "$@"; do
-    hash=$(printf '%s' "$som" | shasum | cut -c1-40)
-    mkdir -p "$MC/assets/objects/${hash:0:2}"
-    # vorbis nativo: o ffmpeg do Homebrew não tem o libvorbis
-    ffmpeg -loglevel error -f lavfi -i "sine=frequency=660:duration=0.2" -c:a vorbis -strict -2 -ac 2 -f ogg "$MC/assets/objects/${hash:0:2}/$hash"
-    objetos="$objetos${objetos:+, }\"minecraft/sounds/$som.ogg\": {\"hash\": \"$hash\", \"size\": 1}"
-  done
-  echo "{\"objects\": {\"icons/icon_16x16.png\": {\"hash\": \"5ff04807c356f1beed0b86ccf659b44b9983e3fa\", \"size\": 781}${objetos:+, }$objetos}}" > "$MC/assets/indexes/17.json"
-}
-t_mc_sem_ffmpeg() {
-  minecraft_falso
-  local saida
-  saida=$(env HOME="$CASA" PATH="$PATH_TESTE" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
-  [ -f "$MONITOR/picareta.png" ] || falha "não extraiu a picareta: $saida" || return 1
-  echo "$saida" | grep -q "1.21.4.jar" || falha "pegou o jar errado: $saida" || return 1
-  echo "$saida" | grep -q "brew install ffmpeg" || falha "$saida"
-}
-teste "com Minecraft e sem ffmpeg: pega a picareta do jar certo e explica como ter os sons" t_mc_sem_ffmpeg
-if command -v ffmpeg >/dev/null 2>&1; then
-  t_mc_com_ffmpeg() {
-    rm -rf "$MC"
-    minecraft_falso random/orb mob/villager/idle1
-    touch -t 202001010000 "$MONITOR/ClaudeMonitor"
-    local saida f
-    saida=$(env HOME="$CASA" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
-    for f in xp1 xp2 xp3 aldeao_hmm1; do [ -f "$MONITOR/sons/$f.wav" ] || falha "falta $f.wav: $saida" || return 1; done
-    echo "$saida" | grep -q "aldeao_hmm2 .*não está" || falha "som que falta no índice devia só avisar: $saida" || return 1
-    [ "$MONITOR/ClaudeMonitor" -nt "$MONITOR/overlay.swift" ] || falha "não cutucou a janelinha pra recarregar" || return 1
-    echo "$saida" | grep -q "Pronto!" || falha "$saida"
-  }
-  teste "com Minecraft e ffmpeg: gera os .wav (XP em 3 tons) e recarrega a janelinha" t_mc_com_ffmpeg
-  t_mc_sem_sons() {
-    rm -rf "$MC" "$MONITOR/sons"
-    minecraft_falso
-    local saida
-    saida=$(env HOME="$CASA" bash "$MONITOR/extrair_minecraft.sh" 2>&1) || falha "saiu com erro: $saida" || return 1
-    echo "$saida" | grep -q "Nenhum som convertido" && ! echo "$saida" | grep -q "Pronto!" || falha "$saida"
-  }
-  teste "com Minecraft e ffmpeg, mas sem nenhum som baixado: não diz \"Pronto!\"" t_mc_sem_sons
-else
-  echo "  --  sem ffmpeg nesta máquina: pulei a conversão dos sons"
-fi
+teste "sem internet: explica como tentar de novo, não quebra e não cria nada" t_mc_sem_internet
 
+kill "$MOJANG_PID" 2>/dev/null
 rm -rf "$TMP"
 echo ""
 if [ $FALHAS -gt 0 ]; then printf '\033[31m%d de %d testes FALHARAM\033[0m\n' $FALHAS $TOTAL; exit 1; fi

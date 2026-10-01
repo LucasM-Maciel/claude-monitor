@@ -4,8 +4,8 @@
 // do Claude Code guardado no Keychain; só lê, nunca renova o token). O Clawd,
 // com a picareta, anda pela borda enquanto algo roda, pula parado em cima quando
 // há pergunta/permissão e fica parado em cima quando nada roda.
-// Sons e picareta vêm do Minecraft, se tiver (extrair_minecraft.sh); senão, sons
-// do Mac e uma picareta desenhada aqui.
+// Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js); sem
+// eles, sons do Mac e os desenhos daqui.
 // Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
 // traz o VS Code. Botão direito: "Fechar".
 // Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
@@ -638,7 +638,7 @@ func bug(_ perna: Character, _ cores: [(Character, String)]) -> Desenho {
 }
 let bugs: [String: Desenho] = ["p": bug("p", coresBug), "q": bug("q", coresBug),
                                "p!": bug("p", coresBugVermelho), "q!": bug("q", coresBugVermelho)]
-// textura do Minecraft (extrair_minecraft.sh), se tiver; senão, o desenho daqui
+// textura do Minecraft (minecraft.js), se tiver; senão, o desenho daqui
 var texturas: [String: NSImage] = [:]
 for nome in desenhos.keys { texturas[nome] = NSImage(contentsOfFile: pasta + "/\(nome).png") }
 func pintar(_ ctx: CGContext, _ d: Desenho, _ r: CGRect, _ grade: CGSize) {

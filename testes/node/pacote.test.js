@@ -71,7 +71,7 @@ test("configurações lidas no código existem no package.json", () => {
 test("arquivos da janelinha que a extensão copia existem", () => {
     const codigo = fs.readFileSync(path.join(EXT, "out", "extension.js"), "utf8");
     const bloco = codigo.match(/const JANELINHA = \{([\s\S]*?)\};/)[1];
-    const nomes = [...bloco.matchAll(/"([\w.]+\.(?:ps1|swift|sh))"/g)].map((m) => m[1]);
+    const nomes = [...bloco.matchAll(/"([\w.]+\.(?:ps1|swift|sh|js))"/g)].map((m) => m[1]);
     assert.ok(nomes.length >= 4, nomes.join());
     for (const n of nomes) assert.ok(fs.existsSync(path.join(EXT, "janelinha", n)), n);
 });
@@ -118,8 +118,9 @@ test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "
     for (const n of ["extension/package.json", "extension/readme.md", "extension/out/extension.js", "extension/out/hook.js",
         "extension/out/processes.js", "extension/out/install.js", "extension/out/sessions.js",
         "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift",
-        "extension/janelinha/extrair_minecraft.ps1", "extension/janelinha/extrair_minecraft.sh"]) {
+        "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt"]) {
         assert.ok(nomes.some((x) => x.toLowerCase() === n), `falta ${n} (tem: ${nomes.join(", ")})`);
     }
-    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|picareta\.png/.test(n)), nomes.join(", "));
+    // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação
+    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n)), nomes.join(", "));
 });

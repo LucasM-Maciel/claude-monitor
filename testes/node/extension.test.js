@@ -8,13 +8,14 @@ const os = require("os");
 const path = require("path");
 const Module = require("module");
 const cp = require("child_process");
+const mojang = require("../mojang-falso");
 
 const RAIZ = path.join(__dirname, "..", "..", "extensao");
 const manifesto = JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf8"));
 
 // --- VS Code de mentira ---
 function criarVscode(config, { clicar, focada }) {
-    const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], abertos: [], config: { ...config } };
+    const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], abertos: [], progresso: [], config: { ...config } };
     const msg = (tipo, respostas) => (texto, ...botoes) => {
         r.mensagens.push({ tipo, texto, botoes });
         return Promise.resolve(botoes.includes(clicar) ? clicar : respostas?.[texto.slice(0, 40)]);
@@ -27,6 +28,7 @@ function criarVscode(config, { clicar, focada }) {
         MarkdownString: class { constructor(v) { this.value = v; } },
         TreeItemCollapsibleState: { None: 0 },
         StatusBarAlignment: { Left: 1 },
+        ProgressLocation: { Notification: 15 },
         ConfigurationTarget: { Global: 1 },
         Uri: { file: (p) => ({ fsPath: p }), parse: (u) => ({ toString: () => u }) },
         window: {
@@ -38,6 +40,7 @@ function criarVscode(config, { clicar, focada }) {
             showWarningMessage: msg("aviso"),
             showErrorMessage: msg("erro"),
             setStatusBarMessage: () => ({ dispose() {} }),
+            withProgress: (opcoes, fn) => { r.progresso.push(opcoes.title); return fn({ report() {} }); },
             createTerminal: (o) => { r.terminais.push(o); return { show() {} }; },
             createOutputChannel: () => ({ clear() {}, appendLine() {}, show() {} }),
             registerUriHandler: (h) => { r.uri = h; return { dispose() {} }; },
@@ -93,8 +96,13 @@ let ativa;  // { ext, contexto }
 let modLoad = Module._load;
 
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
-async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true } = {}) {
+async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false } = {}) {
     casa ??= fs.mkdtempSync(path.join(os.tmpdir(), "cm-ext-"));
+    if (!semSons) {
+        // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
+        fs.mkdirSync(path.join(casa, ".claude-monitor", "sons"), { recursive: true });
+        fs.writeFileSync(path.join(casa, ".claude-monitor", "sons", "levelup.wav"), "");
+    }
     process.env.HOME = casa;
     process.env.USERPROFILE = casa;
     Object.defineProperty(process, "platform", { value: plataforma });
@@ -136,7 +144,7 @@ const spawns = () => processos.filter((p) => p.tipo === "spawn");
 
 test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", async () => {
     const { pasta } = await ativar({ plataforma: "win32" });
-    for (const f of ["hook.js", "processes.js", "overlay.ps1", "extrair_minecraft.ps1"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["hook.js", "processes.js", "overlay.ps1", "minecraft.js", "vorbis.min.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
     assert.strictEqual(fs.readFileSync(path.join(pasta, "versao-janelinha"), "utf8"), manifesto.version);
     const [s] = spawns();
     assert.strictEqual(s.cmd, "cmd.exe");
@@ -149,7 +157,7 @@ test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", asyn
 
 test("Mac: copia o .swift, compila com swift 5 e abre o binário", async () => {
     const { pasta } = await ativar({ plataforma: "darwin" });
-    for (const f of ["overlay.swift", "extrair_minecraft.sh"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
     const compilou = processos.find((p) => p.cmd === "xcrun");
     assert.ok(compilou, "não chamou o xcrun swiftc");
     assert.deepStrictEqual(compilou.args.slice(0, 4), ["swiftc", "-swift-version", "5", "-O"]);
@@ -345,15 +353,83 @@ test("clique na janelinha (vscode://local.claude-monitor/sessao?id=…) abre a a
     assert.ok(r.mensagens.some((m) => m.texto.includes("já fechou")), JSON.stringify(r.mensagens));
 });
 
-test("'Usar sons do Minecraft' roda o script certo num terminal", async () => {
-    for (const [plataforma, shell, script] of [["win32", "powershell.exe", "extrair_minecraft.ps1"], ["darwin", "/bin/bash", "extrair_minecraft.sh"]]) {
-        const { r, pasta } = await ativar({ plataforma });
-        r.comandos.get("claudeMonitor.minecraft")();
-        const t = r.terminais.at(-1);
-        assert.strictEqual(t.shellPath, shell);
-        assert.ok(t.shellArgs.includes(path.join(pasta, script)), JSON.stringify(t.shellArgs));
-        desativar();
+/** Mojang de mentira no ar (ou, com `foraDoAr`, uma porta que ninguém atende) durante fn */
+async function comMojang(fn, { foraDoAr = false } = {}) {
+    const m = await mojang.iniciar();
+    if (foraDoAr) await m.fechar();
+    process.env.CLAUDE_MONITOR_MOJANG = m.url;
+    try {
+        return await fn(m);
+    } finally {
+        delete process.env.CLAUDE_MONITOR_MOJANG;
+        if (!foraDoAr) await m.fechar();
     }
+}
+/** espera o diário da janelinha ter `vezes` linhas batendo com `re` */
+async function noDiario(pasta, re, vezes = 1) {
+    for (let i = 0; i < 100; i++) {
+        const linhas = fs.existsSync(path.join(pasta, "janelinha.log")) ? fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8").split("\n") : [];
+        if (linhas.filter((l) => re.test(l)).length >= vezes) return linhas;
+        await new Promise((ok) => setTimeout(ok, 50));
+    }
+    assert.fail(`o diário não anotou ${re} (${vezes}x)`);
+}
+
+test("'Usar sons do Minecraft' baixa da Mojang com o andamento na tela e avisa quando acaba", async () => {
+    for (const plataforma of ["win32", "darwin"]) {
+        await comMojang(async () => {
+            const { r, pasta } = await ativar({ plataforma });
+            await r.comandos.get("claudeMonitor.minecraft")();
+            assert.match(r.progresso.at(-1), /baixando os sons do Minecraft/);
+            assert.ok(r.mensagens.some((m) => /pronto, a janelinha está com os sons do Minecraft 1\.99/.test(m.texto)), JSON.stringify(r.mensagens));
+            for (const f of ["sons/xp1.wav", "sons/gato.wav", "picareta.png", "pedra.png"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+            assert.strictEqual(r.terminais.length, 0, "não precisa mais de terminal");
+            desativar();
+        });
+    }
+});
+
+test("'Usar sons do Minecraft' sem internet: avisa, sem quebrar", async () => {
+    await comMojang(async () => {
+        const { r, pasta } = await ativar();
+        await r.comandos.get("claudeMonitor.minecraft")();
+        assert.ok(r.mensagens.some((m) => m.tipo === "aviso" && /servidor da Mojang/.test(m.texto)), JSON.stringify(r.mensagens));
+        await noDiario(pasta, /não baixei os sons do Minecraft/);
+    }, { foraDoAr: true });
+});
+
+test("sem os sons do Minecraft: a extensão baixa sozinha, calada, e anota no diário", async () => {
+    await comMojang(async () => {
+        const { r, pasta } = await ativar({ semSons: true });
+        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(12 sons, 4 texturas\)/);
+        assert.ok(fs.existsSync(path.join(pasta, "sons", "levelup.wav")));
+        assert.ok(!r.mensagens.some((m) => /Minecraft/.test(m.texto)), "não era pra mostrar nada");
+    });
+});
+
+test("com os sons já baixados, a extensão não vai atrás da Mojang", async () => {
+    await comMojang(async (m) => {
+        await ativar();
+        await new Promise((ok) => setTimeout(ok, 200));
+        assert.deepStrictEqual(m.pedidos, []);
+    });
+});
+
+test("baixar sozinha falhou: só tenta de novo depois de 6 h", async () => {
+    await comMojang(async () => {
+        const { casa, pasta } = await ativar({ semSons: true });
+        await noDiario(pasta, /não baixei os sons do Minecraft/);
+        desativar();
+        await ativar({ casa, semSons: true });  // reabriu o VS Code logo depois
+        await new Promise((ok) => setTimeout(ok, 300));
+        await noDiario(pasta, /não baixei os sons do Minecraft/, 1);
+        assert.strictEqual(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8").split("não baixei").length - 1, 1, "tentou de novo cedo demais");
+        desativar();
+        const seteHoras = new Date(Date.now() - 7 * 3600 * 1000);
+        fs.utimesSync(path.join(pasta, "tentativa-minecraft"), seteHoras, seteHoras);
+        await ativar({ casa, semSons: true });
+        await noDiario(pasta, /não baixei os sons do Minecraft/, 2);
+    }, { foraDoAr: true });
 });
 
 test("som: com a janelinha aberta quem toca é ela; sem janelinha, a extensão toca", async () => {

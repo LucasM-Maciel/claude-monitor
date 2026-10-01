@@ -90,19 +90,17 @@ estiver trabalhando nele.
 - **Desligar a janelinha** e ficar só com a barra lateral: nas configurações
   do VS Code, desmarque **Claude Monitor: Overlay**.
 
-### Sons do Minecraft (opcional)
+### Sons do Minecraft
 
-Quem tem o **Minecraft Java** instalado pode trocar os sons pelos do jogo: o
-"hmm" do aldeão quando alguém espera você, o som de XP quando uma sessão termina
-e o de **subir de nível** quando termina a última (nada mais rodando nem esperando
-você). A picareta, a espada, a pedra e o diamante do Clawd também viram os do
-jogo. Precisa do ffmpeg:
+Os sons são os do **Minecraft**: o "hmm" do aldeão quando alguém espera você, o
+som de XP quando uma sessão termina e o de **subir de nível** quando termina a
+última (nada mais rodando nem esperando você). A picareta, a espada, a pedra e o
+diamante do Clawd também são os do jogo.
 
-- Windows: `winget install Gyan.FFmpeg`
-- Mac: `brew install ffmpeg`
-
-Depois, no VS Code: `Ctrl+Shift+P` > **Claude Monitor: Usar sons do Minecraft**.
-Os sons não vêm no pacote porque são da Mojang: cada um tira do próprio jogo.
+O instalador baixa tudo do servidor da Mojang, o mesmo que o launcher do jogo
+usa: **não precisa ter o Minecraft nem o ffmpeg**, e nada da Mojang vai no
+pacote. Instalou sem internet? A extensão baixa sozinha depois, ou, no VS Code:
+`Ctrl+Shift+P` > **Claude Monitor: Usar sons do Minecraft**.
 
 ## Deu problema?
 

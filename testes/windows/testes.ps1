@@ -123,7 +123,8 @@ Write-Host 'Sintaxe'
 Teste 'todos os .ps1 (do repositório e do pacote) abrem no PowerShell 5.1' {
     $todos = @(Get-ChildItem $raiz -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch '\\node_modules\\' }) +
              @(Get-ChildItem "$tmp\vsix", "$tmp\baixado" -Recurse -Filter *.ps1)
-    Verdade ($todos.Count -ge 6) "só achei $($todos.Count) .ps1"
+    # repo: overlay, instalador e este; pacote: overlay e instalador
+    Verdade ($todos.Count -ge 5) "só achei $($todos.Count) .ps1"
     foreach ($f in $todos) {
         $erros = $null
         [void][Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$erros)
@@ -254,73 +255,33 @@ if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto
 }
 
 Write-Host ''
-Write-Host 'Minecraft'
-$scriptMc = "$tmp\vsix\extension\janelinha\extrair_minecraft.ps1"
+Write-Host 'Minecraft (servidor da Mojang de mentira: testes\mojang-falso.js)'
+$scriptMc = "$tmp\vsix\extension\janelinha\minecraft.js"
 $pathSemFfmpeg = "$env:WINDIR\system32;$env:WINDIR;$env:WINDIR\System32\WindowsPowerShell\v1.0"
-Teste 'sem Minecraft: avisa, não quebra e não cria nada' {
-    $casa = "$tmp\mc0\casa"; New-Item -ItemType Directory -Force $casa, "$tmp\mc0\appdata" | Out-Null
-    $r = ComAmbiente @{ APPDATA = "$tmp\mc0\appdata"; USERPROFILE = $casa } { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptMc) }
+# fica no ar até o fim: o instalador também baixa dele
+$mojang = Start-Process $node -ArgumentList "`"$raiz\testes\mojang-falso.js`"" -NoNewWindow -PassThru -RedirectStandardOutput "$tmp\mojang.txt"
+for ($i = 0; $i -lt 100 -and -not (Get-Content "$tmp\mojang.txt" -ErrorAction Ignore); $i++) { Start-Sleep -Milliseconds 100 }
+$urlMojang = Get-Content "$tmp\mojang.txt" -TotalCount 1
+Teste 'baixa os sons e as texturas, sem Minecraft nem ffmpeg, e recarrega a janelinha' {
+    $casa = "$tmp\mc1\casa"; New-Item -ItemType Directory -Force "$casa\.claude-monitor" | Out-Null
+    Set-Content "$casa\.claude-monitor\overlay.ps1" '# janelinha'
+    (Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-1)
+    $r = ComAmbiente @{ USERPROFILE = $casa; PATH = $pathSemFfmpeg; CLAUDE_MONITOR_MOJANG = $urlMojang } { Rodar $node @($scriptMc) }
     Verdade ($r.codigo -eq 0) $r.saida
-    Verdade ($r.saida -match 'Minecraft Java n.o encontrado') $r.saida
-    Verdade (-not (Test-Path "$casa\.claude-monitor\picareta.png")) 'criou picareta do nada'
+    foreach ($f in 'xp1', 'xp2', 'xp3', 'levelup', 'aldeao_hmm1', 'aldeao_hmm2', 'gato') { Verdade (Test-Path "$casa\.claude-monitor\sons\$f.wav") "falta $f.wav: $($r.saida)" }
+    foreach ($f in 'picareta', 'espada', 'diamante', 'pedra') { Verdade (Test-Path "$casa\.claude-monitor\$f.png") "falta $f.png: $($r.saida)" }
+    # o mesmo tocador da janelinha: Load() recusa .wav que ele não entende
+    foreach ($wav in Get-ChildItem "$casa\.claude-monitor\sons\*.wav") { (New-Object Media.SoundPlayer $wav.FullName).Load() }
+    Verdade ((Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-5)) 'não cutucou a janelinha pra recarregar'
+    Verdade ($r.saida -match 'Pronto!') $r.saida
 }
-
-# Minecraft de mentira: índice, um jar de verdade (zip) e um jar de mod pra ignorar
-function MinecraftFalso($appdata, [switch]$ComSons) {
-    $mc = "$appdata\.minecraft"
-    New-Item -ItemType Directory -Force "$mc\assets\indexes", "$mc\versions\1.21.4", "$mc\versions\fabric-loader-1.21" | Out-Null
-    $png = "$tmp\textura.png"; PngMagenta $png
-    foreach ($jar in "$mc\versions\1.21.4\1.21.4.jar", "$mc\versions\fabric-loader-1.21\outro-nome.jar") {
-        $z = [IO.Compression.ZipFile]::Open($jar, 'Create')
-        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $png, 'assets/minecraft/textures/item/diamond_pickaxe.png')
-        $z.Dispose()
-    }
-    $objetos = @{}
-    if ($ComSons) {
-        foreach ($som in 'random/orb', 'mob/villager/idle1') {
-            $hash = -join ((1..40) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
-            $pastaObj = "$mc\assets\objects\$($hash.Substring(0, 2))"
-            New-Item -ItemType Directory -Force $pastaObj | Out-Null
-            # vorbis nativo: nem todo ffmpeg tem o libvorbis (o do Homebrew não tem)
-            & ffmpeg -loglevel error -f lavfi -i 'sine=frequency=660:duration=0.2' -c:a vorbis -strict -2 -ac 2 "$pastaObj\$hash.ogg"
-            Move-Item "$pastaObj\$hash.ogg" "$pastaObj\$hash"
-            $objetos["minecraft/sounds/$som.ogg"] = @{ hash = $hash; size = 1 }
-        }
-    }
-    @{ objects = $objetos } | ConvertTo-Json -Depth 5 | Set-Content "$mc\assets\indexes\17.json" -Encoding ASCII
+Teste 'sem internet: explica como tentar de novo, não quebra e não cria nada' {
+    $casa = "$tmp\mc2\casa"; New-Item -ItemType Directory -Force $casa | Out-Null
+    $r = ComAmbiente @{ USERPROFILE = $casa; CLAUDE_MONITOR_MOJANG = 'http://127.0.0.1:9' } { Rodar $node @($scriptMc) }
+    Verdade ($r.codigo -eq 1) "$($r.codigo): $($r.saida)"
+    Verdade ($r.saida -match 'Usar sons do Minecraft' -and $r.saida -notmatch 'Pronto!') $r.saida
+    Verdade (-not (Test-Path "$casa\.claude-monitor\sons")) 'criou a pasta de sons sem ter som'
 }
-Teste 'com Minecraft e sem ffmpeg: pega a picareta do jar certo e explica como ter os sons' {
-    $casa = "$tmp\mc1\casa"; New-Item -ItemType Directory -Force $casa | Out-Null
-    MinecraftFalso "$tmp\mc1\appdata"
-    $r = ComAmbiente @{ APPDATA = "$tmp\mc1\appdata"; USERPROFILE = $casa; PATH = $pathSemFfmpeg } {
-        Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptMc)
-    }
-    Verdade ($r.codigo -eq 0) $r.saida
-    Verdade (Test-Path "$casa\.claude-monitor\picareta.png") "não extraiu a picareta: $($r.saida)"
-    Verdade ($r.saida -match '1\.21\.4\.jar') "pegou o jar errado: $($r.saida)"
-    Verdade ($r.saida -match 'winget install Gyan\.FFmpeg') $r.saida
-}
-if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-    Teste 'com Minecraft e ffmpeg: gera os .wav (XP em 3 tons) e recarrega a janelinha' {
-        $casa = "$tmp\mc2\casa"; New-Item -ItemType Directory -Force "$casa\.claude-monitor" | Out-Null
-        Set-Content "$casa\.claude-monitor\overlay.ps1" '# janelinha'
-        (Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-1)
-        MinecraftFalso "$tmp\mc2\appdata" -ComSons
-        $r = ComAmbiente @{ APPDATA = "$tmp\mc2\appdata"; USERPROFILE = $casa } { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptMc) 120 }
-        Verdade ($r.codigo -eq 0) $r.saida
-        foreach ($f in 'xp1', 'xp2', 'xp3', 'aldeao_hmm1') { Verdade (Test-Path "$casa\.claude-monitor\sons\$f.wav") "falta $f.wav: $($r.saida)" }
-        Verdade ($r.saida -match 'aldeao_hmm2.*n.o est') "som que falta no índice devia só avisar: $($r.saida)"
-        Verdade ((Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-5)) 'não cutucou a janelinha pra recarregar'
-        Verdade ($r.saida -match 'Pronto!') $r.saida
-    }
-    Teste 'com Minecraft e ffmpeg, mas sem nenhum som baixado: não diz "Pronto!"' {
-        $casa = "$tmp\mc3\casa"; New-Item -ItemType Directory -Force $casa | Out-Null
-        MinecraftFalso "$tmp\mc3\appdata"
-        $r = ComAmbiente @{ APPDATA = "$tmp\mc3\appdata"; USERPROFILE = $casa } { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptMc) 120 }
-        Verdade ($r.codigo -eq 0) $r.saida
-        Verdade ($r.saida -match 'Nenhum som convertido' -and $r.saida -notmatch 'Pronto!') $r.saida
-    }
-} else { Write-Host '  --  sem ffmpeg nesta máquina: pulei a conversão dos sons' -ForegroundColor Yellow }
 
 Write-Host ''
 Write-Host 'Instalador (casa de mentira com espaço e acento, como "C:\Users\João Silva")'
@@ -332,7 +293,7 @@ foreach ($editor in 'code', 'cursor') {
 }
 $ambiente = @{
     USERPROFILE = $casa; LOCALAPPDATA = "$tmp\local"; ProgramFiles = "$tmp\progs"; APPDATA = "$tmp\appdata"
-    PATH = "$bin;$(Split-Path $node);$pathSemFfmpeg"
+    PATH = "$bin;$(Split-Path $node);$pathSemFfmpeg"; CLAUDE_MONITOR_MOJANG = $urlMojang
 }
 $instalador = "$pacote\arquivos\instalar-windows.ps1"
 Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
@@ -342,7 +303,8 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
         $log = Get-Content "$bin\$editor.log" -Raw
         Verdade ($log -match '--install-extension' -and $log -match [regex]::Escape("claude-monitor-$versao.vsix") -and $log -match '--force') "$editor recebeu: $log"
     }
-    foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'extrair_minecraft.ps1') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
+    foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
+    Verdade (Test-Path "$casa\.claude-monitor\sons\levelup.wav") "não baixou os sons do Minecraft: $($r.saida)"
     Verdade (-not (Test-Path "$casa\.claude-monitor\install.js")) 'install.js sobrou na pasta'
     Igual $versao ([IO.File]::ReadAllText("$casa\.claude-monitor\versao-janelinha")) 'versão marcada'
     Verdade ((Get-Content "$casa\.claude-monitor\janelinha.log" -Raw) -match "\[instalador \d+\] copiou a janelinha $([regex]::Escape($versao))") 'não anotou no diário da janelinha'
@@ -392,6 +354,7 @@ Teste 'instalar-windows.cmd (o duplo clique) instala, com os acentos certos na t
     Verdade ($r.saida -match 'Pronto!') $r.saida
     # o .cmd troca o console pra UTF-8: o amigo tem que ver os acentos certos
     Verdade ($r.saida -match 'canto de baixo à direita') "acento embaralhado na tela do amigo: $($r.saida)"
+    Verdade ($r.saida -match 'Pronto! A janelinha já está com os sons do Minecraft') "acento embaralhado no Minecraft: $($r.saida)"
 }
 Teste 'instalar-windows.cmd rodado de dentro do .zip (sem extrair): pede pra extrair' {
     New-Item -ItemType Directory -Force "$tmp\sem-extrair" | Out-Null
@@ -400,6 +363,7 @@ Teste 'instalar-windows.cmd rodado de dentro do .zip (sem extrair): pede pra ext
     Verdade ($r.codigo -eq 1 -and $r.saida -match 'Extraia o .zip') $r.saida
 }
 
+Stop-Process -Id $mojang.Id -ErrorAction Ignore
 Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 Write-Host ''
 if ($script:falhas) { Write-Host "$($script:falhas) de $($script:total) testes FALHARAM" -ForegroundColor Red; exit 1 }

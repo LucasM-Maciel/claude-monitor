@@ -4,8 +4,8 @@
 # Toca som quando uma sessão passa a esperar você. O Clawd, com a picareta de
 # diamante, anda pela borda enquanto algo roda, pula parado em cima quando há
 # pergunta/permissão e fica parado em cima quando nada roda.
-# Sons e picareta vêm do Minecraft, se ele estiver instalado (extrair_minecraft.ps1);
-# senão, sons do Windows e uma picareta desenhada aqui.
+# Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js);
+# sem eles, sons do Windows e os desenhos daqui.
 # Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
 # traz o VS Code. Botão direito: "Fechar".
 # Passar o mouse numa sessão: o estado dela.
@@ -528,7 +528,7 @@ function Desenho($linhas, $cores) {
     }
     [Windows.Media.DrawingImage]::new($grupo)
 }
-# textura do Minecraft (extrair_minecraft.ps1), se tiver; senão, o desenho daqui
+# textura do Minecraft (minecraft.js), se tiver; senão, o desenho daqui
 function Textura($nome) {
     $arquivo = "$Pasta\$nome.png"
     if (-not (Test-Path $arquivo)) { return Desenho $desenhos[$nome] $cores16 }

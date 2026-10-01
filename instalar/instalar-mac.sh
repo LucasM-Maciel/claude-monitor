@@ -49,7 +49,7 @@ passo "Copiando os arquivos pra ~/.claude-monitor"
 TEMP=$(mktemp -d)
 mkdir -p "$PASTA"
 unzip -o -j -q "$VSIX" extension/out/hook.js extension/out/processes.js \
-  extension/janelinha/overlay.swift extension/janelinha/extrair_minecraft.sh -d "$PASTA" \
+  extension/janelinha/overlay.swift extension/janelinha/minecraft.js extension/janelinha/vorbis.min.js -d "$PASTA" \
   || falhou "O .vsix está incompleto. Baixe de novo."
 unzip -o -j -q "$VSIX" extension/out/install.js -d "$TEMP" || falhou "O .vsix está incompleto. Baixe de novo."
 printf '%s' "$VERSAO" > "$PASTA/versao-janelinha"  # a extensão só recopia quando a versão muda
@@ -85,8 +85,9 @@ else
   falhou "Não consegui montar a janelinha. Mande o texto acima pra quem te passou o Claude Monitor."
 fi
 
-passo "Minecraft (opcional)"
-bash "$PASTA/extrair_minecraft.sh"
+passo "Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)"
+if command -v node >/dev/null 2>&1; then node "$PASTA/minecraft.js" || true
+else aviso "Sem Node.js a janelinha fica com os sons do Mac."; fi
 
 if [ -z "$SEM_ABRIR" ]; then
   nohup "$PASTA/ClaudeMonitor" >/dev/null 2>&1 &
