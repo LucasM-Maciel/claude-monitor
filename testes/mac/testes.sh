@@ -194,6 +194,22 @@ t_cores() {
   done
 }
 teste "cores das bolinhas e das barras no cenário 'misto'" t_cores
+# trabalhando pulsa (quem não distingue verde de vermelho vê o movimento); terminou não
+t_pulso() {
+  local pasta="$TMP/cenario xp-rodando ção" f extra=()  # o do laço acima: uma terminou, outra trabalhando
+  [ -f "$pasta/uso.json" ] && extra=(--uso "$pasta/uso.json")
+  for f in 0 0.5; do
+    rm -f "$SAIDA/mac-pulso-$f.png"
+    com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$SAIDA/mac-pulso-$f.png" --pasta "$pasta" "${extra[@]}" --pulso "$f" \
+      || falha "a janelinha não terminou direito (fase $f)" || return 1
+  done
+  local v0 v1 r0 r1
+  v0=$(pixels "$SAIDA/mac-pulso-0.png" 34 197 94 30); v1=$(pixels "$SAIDA/mac-pulso-0.5.png" 34 197 94 30)
+  r0=$(pixels "$SAIDA/mac-pulso-0.png" 239 68 68 30); r1=$(pixels "$SAIDA/mac-pulso-0.5.png" 239 68 68 30)
+  [ $((v0 - v1)) -ge 20 ] || falha "a bolinha verde não apagou no meio do pulso (verde: $v0 -> $v1)" || return 1
+  [ "$r1" -ge $((r0 - 10)) ] || falha "a vermelha apagou junto: só a verde pulsa (vermelho: $r0 -> $r1)"
+}
+teste "bolinha verde pulsa e a vermelha não (fase 0 e 0.5)" t_pulso
 t_barra_vermelha() { [ "$(pixels "$SAIDA/mac-andando.png" 239 68 68 30)" -gt 10 ] || falha "barra do 5h em 97% não ficou vermelha"; }
 teste "barra vermelha quando o 5h passa de 95%" t_barra_vermelha
 

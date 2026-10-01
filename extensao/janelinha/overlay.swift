@@ -384,8 +384,17 @@ final class Raiz: NSView {
     override var isFlipped: Bool { true }
 }
 
+// trabalhando: a bolinha verde pulsa, pra quem não distingue verde de vermelho (e pra
+// não ler "verde = pronto"). Opacidade 0,65 + 0,35·cos(2π·fase), volta inteira em 1,6 s;
+// o --foto fica na fase do --pulso (0 = acesa, 0.5 = o mais apagada).
+func opacidadeDoPulso() -> CGFloat {
+    let fase = arquivoFoto != nil ? Double(argumento("--pulso") ?? "0") ?? 0
+        : Date().timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
+    return CGFloat(0.65 + 0.35 * cos(2 * Double.pi * fase))
+}
+
 final class Cartao: NSView {
-    var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String)] = []
+    var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String, pulsa: Bool)] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
     var aviso: String?  // saiu versão nova: a linha roxa embaixo
     var yAviso: CGFloat = 0
@@ -420,7 +429,7 @@ final class Cartao: NSView {
             y += 20
         }
         for l in linhas {
-            l.cor.setFill()
+            (l.pulsa ? l.cor.withAlphaComponent(opacidadeDoPulso()) : l.cor).setFill()
             NSBezierPath(ovalIn: NSRect(x: x, y: y + 6, width: 8, height: 8)).fill()
             escrever(l.nome, hex("#E5E7EB"), NSRect(x: x + 16, y: y, width: 170, height: 20))
             escrever(l.tempo, l.cor, NSRect(x: x + 186, y: y, width: 36, height: 20), .right)
@@ -900,9 +909,10 @@ func atualizar() {
     let agora = Date().timeIntervalSince1970
     let sessoes = lerSessoes(agora: agora)
     avisar(sessoes)
-    cartao.linhas = sessoes.map { s -> (id: String, cor: NSColor, nome: String, tempo: String, rotulo: String) in
+    cartao.linhas = sessoes.map { s -> (id: String, cor: NSColor, nome: String, tempo: String, rotulo: String, pulsa: Bool) in
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
-        return (id: s.id, cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo)
+        return (id: s.id, cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo,
+                pulsa: s.situacao == "working")
     }
     buscarUso()
     cartao.aviso = versaoNova()
@@ -936,7 +946,11 @@ func repetir(_ intervalo: TimeInterval, _ bloco: @escaping () -> Void) {
 atualizar()
 janela.orderFrontRegardless()
 repetir(2) { atualizar() }
-repetir(1.0 / 30) { palco.tique() }
+repetir(1.0 / 30) {
+    palco.tique()
+    // o pulso da bolinha verde: só a coluna das bolinhas
+    if cartao.linhas.contains(where: { $0.pulsa }) { cartao.setNeedsDisplay(NSRect(x: 8, y: 0, width: 12, height: cartao.bounds.height)) }
+}
 
 if let foto = arquivoFoto {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

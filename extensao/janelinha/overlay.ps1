@@ -15,8 +15,9 @@
 # Teste: -Foto arquivo.png desenha, salva e sai (sem internet: o usage vem de -ArquivoUso
 # arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra; -Clicar id
 # clica na linha dessa sessão (o .txt diz o link que abriria); -Cena "pedra 2.1"
-# fotografa esse instante da cena (pedra ou bug), em segundos.
-param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar, [string]$Cena)
+# fotografa esse instante da cena (pedra ou bug), em segundos; -Pulso 0.5 fotografa a
+# bolinha verde nesse ponto do pulso (0 = acesa, 0.5 = o mais apagada).
+param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar, [string]$Cena, [string]$Pulso)
 Add-Type -AssemblyName PresentationFramework
 if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
 # quem me abre de dentro do VS Code me passa ELECTRON_RUN_AS_NODE=1; com ele, o Code.exe
@@ -121,6 +122,22 @@ $mascote = $win.FindName('Mascote')
 $cartao.Margin = [Windows.Thickness]::new($margem)
 
 function Cor($hex) { [Windows.Media.BrushConverter]::new().ConvertFromString($hex) }
+
+# trabalhando: a bolinha verde pulsa, pra quem não distingue verde de vermelho (e pra
+# não ler "verde = pronto"). Um pincel só, animado: a lista se refaz a cada 2 s e o
+# pulso continua. Opacidade 0,65 + 0,35·cos(2π·fase), volta inteira em 1,6 s.
+$bolaVerde = New-Object Windows.Media.SolidColorBrush ([Windows.Media.ColorConverter]::ConvertFromString($estados.working[0]))
+if ($Foto) {
+    $fase = $(if ($Pulso) { [double]::Parse($Pulso, [Globalization.CultureInfo]::InvariantCulture) } else { 0 })
+    $bolaVerde.Opacity = 0.65 + 0.35 * [math]::Cos(2 * [math]::PI * $fase)
+} else {
+    $pulsando = [Windows.Media.Animation.DoubleAnimation]::new(1, 0.3, [Windows.Duration]::new([TimeSpan]::FromMilliseconds(800)))
+    $pulsando.AutoReverse = $true
+    $pulsando.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
+    $pulsando.EasingFunction = New-Object Windows.Media.Animation.SineEase -Property @{ EasingMode = 'EaseInOut' }
+    [Windows.Media.Animation.Timeline]::SetDesiredFrameRate($pulsando, 20)
+    $bolaVerde.BeginAnimation([Windows.Media.Brush]::OpacityProperty, $pulsando)
+}
 
 function Texto($texto, $cor, $largura) {
     $t = New-Object Windows.Controls.TextBlock
@@ -321,7 +338,7 @@ function Atualizar {
         if (-not $cor) { $cor, $rotulo = '#9CA3AF', $s.situacao }
         $bola = New-Object Windows.Shapes.Ellipse
         $bola.Width = 8; $bola.Height = 8
-        $bola.Fill = Cor $cor
+        $bola.Fill = $(if ($s.situacao -eq 'working') { $bolaVerde } else { Cor $cor })
         $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
         $bola.VerticalAlignment = 'Center'
         $nomeSessao = Texto $s.name '#E5E7EB' 170

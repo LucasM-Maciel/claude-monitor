@@ -16,7 +16,7 @@ você, ela avisa com um som.
 
 | Bolinha | Quer dizer |
 |---|---|
-| 🟢 verde | trabalhando |
+| 🟢 verde, pulsando | trabalhando |
 | 🔴 vermelha | terminou |
 | 🔵 azul | te fez uma pergunta |
 | 🟡 amarela | pedindo permissão pra rodar algo |

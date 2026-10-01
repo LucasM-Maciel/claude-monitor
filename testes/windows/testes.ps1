@@ -185,6 +185,23 @@ Teste "cores das bolinhas e das barras no cenário 'misto'" {
         Verdade ([Pixels]::Contar($foto, $c[1], $c[2], $c[3], 25) -gt 10) "cadê a cor $($c[0])?"
     }
 }
+# trabalhando pulsa (quem não distingue verde de vermelho vê o movimento); terminou não
+Teste "bolinha verde pulsa e a vermelha não (cenário 'xp-rodando', fase 0 e 0.5)" {
+    $pasta = "$tmp\cenario xp-rodando ção"  # o do laço acima: uma terminou, outra trabalhando
+    $fotos = foreach ($fase in '0', '0.5') {
+        $foto = "$Saida\windows-pulso-$fase.png"
+        Remove-Item "$foto*" -ErrorAction SilentlyContinue
+        $argumentos = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', $overlay, '-Foto', $foto, '-Pasta', $pasta, '-Pulso', $fase)
+        if (Test-Path "$pasta\uso.json") { $argumentos += '-ArquivoUso', "$pasta\uso.json" }
+        $r = Rodar powershell.exe $argumentos 60
+        Verdade ($r.codigo -eq 0 -and (Test-Path $foto)) "a janelinha não terminou direito: $($r.saida)"
+        $foto
+    }
+    $verde = @($fotos | ForEach-Object { [Pixels]::Contar($_, 34, 197, 94, 25) })
+    $vermelho = @($fotos | ForEach-Object { [Pixels]::Contar($_, 239, 68, 68, 25) })
+    Verdade ($verde[0] - $verde[1] -ge 20) "a bolinha verde não apagou no meio do pulso (verde: $($verde -join ' -> '))"
+    Verdade ($vermelho[1] -ge $vermelho[0] - 10) "a vermelha apagou junto: só a verde pulsa (vermelho: $($vermelho -join ' -> '))"
+}
 Teste "barra vermelha quando o 5h passa de 95% (cenário 'andando')" {
     Verdade ([Pixels]::Contar("$Saida\windows-andando.png", 239, 68, 68, 25) -gt 10) 'barra não ficou vermelha'
 }
