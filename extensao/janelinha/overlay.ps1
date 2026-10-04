@@ -76,7 +76,21 @@ $sons = @{
     tudo       = $levelup  # subir de nível: a última terminou e não sobrou nada rodando nem esperando
 }
 $nomeDoSom = @{ permission = 'aldeao'; question = 'aldeao'; finished = 'xp'; tudo = 'levelup' }  # pro .txt do -Foto
-$tocador = New-Object Media.SoundPlayer
+# configurações do usuário gravadas em config.json
+$configArquivo = Join-Path $Pasta 'config.json'
+$config = @{ opacidade = 0.9; clawd = $true; volume = 0.4 }
+try {
+    $c = Get-Content -LiteralPath $configArquivo -Raw -ErrorAction Stop | ConvertFrom-Json
+    if ($null -ne $c.opacidade) { $config.opacidade = [double]$c.opacidade }
+    if ($null -ne $c.clawd)    { $config.clawd    = [bool]$c.clawd }
+    if ($null -ne $c.volume)   { $config.volume   = [double]$c.volume }
+} catch {}
+function SalvarConfig {
+    try { [IO.File]::WriteAllText($configArquivo, ($config | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false)) } catch {}
+}
+$tocador = New-Object Windows.Media.MediaPlayer
+$tocador.Volume = $config.volume
+$tocador.Add_MediaOpened({ $tocador.Play() })
 $ultimo = @{}  # id da sessão -> última situação vista
 # teste: o -Foto parte da situação anterior em antes.json, pra ver qual som tocaria
 if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
@@ -120,6 +134,8 @@ $painelUso = $win.FindName('Uso')
 $painelAviso = $win.FindName('Aviso')
 $mascote = $win.FindName('Mascote')
 $cartao.Margin = [Windows.Thickness]::new($margem)
+$cartao.Opacity = $config.opacidade
+if (-not $config.clawd) { $mascote.Visibility = 'Hidden' }
 
 function Cor($hex) { [Windows.Media.BrushConverter]::new().ConvertFromString($hex) }
 
@@ -286,10 +302,10 @@ function Avisar($sessoes) {
     if ($tocar) {
         $script:somDaVez = $tocar
         if ($Foto) { return }
-        $tocador.SoundLocation = $sons[$tocar] | Get-Random
+        $arquivo = $sons[$tocar] | Get-Random
         # no diário: amigo sem som manda o janelinha.log e dá pra ver se ela tentou tocar
-        try { $tocador.Play(); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $tocador.SoundLocation -Leaf))" }
-        catch { Anotar "não toquei $($tocador.SoundLocation): $($_.Exception.Message)" }
+        try { $tocador.Open([Uri]("file:///" + $arquivo.Replace('\', '/'))); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $arquivo -Leaf))" }
+        catch { Anotar "não toquei $arquivo : $($_.Exception.Message)" }
     }
 }
 
@@ -743,6 +759,13 @@ function FimDaCena {
 # 'pulando' (pergunta/permissão): parado em cima do cartão, pulando.
 # 'parado' (nada rodando): parado em cima do cartão, com as 4 pernas no chão.
 function Clawd($modo) {
+    if (-not $config.clawd) {
+        if ($luta.tipo) { FimDaCena }
+        $passo.Stop()
+        $mascote.Visibility = 'Hidden'
+        return
+    }
+    $mascote.Visibility = 'Visible'
     if ($passeio.modo -eq $modo) { return }
     if ($luta.tipo) { FimDaCena }  # mudou no meio da luta
     if ($modo -eq 'andando' -and -not $Foto) {  # o -Foto fica sempre na picareta
@@ -820,13 +843,130 @@ $win.Add_MouseLeftButtonDown({
     $lugar.y = $win.Top
     if ($clicou -and $clicado) { Clicar $clicado }
 })
+# só anota: o erro segue o caminho de sempre
+$win.Dispatcher.Add_UnhandledException({ Anotar "erro: $($_.Exception.Message)" })
+$menu = [Windows.Markup.XamlReader]::Parse(@'
+<ContextMenu xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             HasDropShadow="False"
+             FontFamily="Segoe UI" FontSize="12">
+  <ContextMenu.Template>
+    <ControlTemplate TargetType="ContextMenu">
+      <Border Background="#1E1E1E" BorderBrush="#3F3F46" BorderThickness="1,1,0,0" Padding="0,4">
+        <ItemsPresenter/>
+      </Border>
+    </ControlTemplate>
+  </ContextMenu.Template>
+  <ContextMenu.Resources>
+    <Style TargetType="MenuItem">
+      <Setter Property="Foreground" Value="#D1D5DB"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Border x:Name="bd" Background="Transparent" Padding="12,5">
+              <StackPanel Orientation="Horizontal">
+                <Border x:Name="cbox" Width="11" Height="11" BorderBrush="#4B5563"
+                        BorderThickness="1" CornerRadius="2" VerticalAlignment="Center"
+                        Margin="0,0,6,0" Visibility="Collapsed">
+                  <TextBlock x:Name="chk" Text="✓" Foreground="#D1D5DB" FontSize="9"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Visibility="Collapsed"/>
+                </Border>
+                <ContentPresenter ContentSource="Header"
+                                  VerticalAlignment="Center" RecognizesAccessKey="True"/>
+              </StackPanel>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
+              </Trigger>
+              <Trigger Property="IsCheckable" Value="True">
+                <Setter TargetName="cbox" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="cbox" Property="BorderBrush" Value="#9CA3AF"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="Separator">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Separator">
+            <Border Background="#33FFFFFF" Height="1" Margin="0,3"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </ContextMenu.Resources>
+</ContextMenu>
+'@)
+
+# toggle do Clawd
+$itemClawd = New-Object Windows.Controls.MenuItem
+$itemClawd.Header = 'Clawd'
+$itemClawd.IsCheckable = $true
+$itemClawd.IsChecked = $config.clawd
+$itemClawd.Add_Checked({ $config.clawd = $true; $passeio.modo = $null; SalvarConfig })
+$itemClawd.Add_Unchecked({ $config.clawd = $false; SalvarConfig })
+[void]$menu.Items.Add($itemClawd)
+
+# opacidade
+$painelOpac = New-Object Windows.Controls.StackPanel
+$painelOpac.Orientation = 'Horizontal'
+$painelOpac.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+[void]$painelOpac.Children.Add((Texto 'Opacidade' '#D1D5DB' 70))
+$slOpac = New-Object Windows.Controls.Slider
+$slOpac.Minimum = 20; $slOpac.Maximum = 100; $slOpac.Value = $config.opacidade * 100
+$slOpac.Width = 85; $slOpac.VerticalAlignment = 'Center'
+$lblOpac = Texto ('{0}%' -f [int]($config.opacidade * 100)) '#9CA3AF' 32
+$lblOpac.TextAlignment = 'Right'
+$slOpac.Add_ValueChanged({
+    $v = $slOpac.Value / 100
+    $lblOpac.Text = '{0}%' -f [int]($slOpac.Value)
+    $config.opacidade = [math]::Round($v, 2); $cartao.Opacity = $v; SalvarConfig
+})
+[void]$painelOpac.Children.Add($slOpac)
+[void]$painelOpac.Children.Add($lblOpac)
+[void]$menu.Items.Add($painelOpac)
+
+# volume
+$painelVol = New-Object Windows.Controls.StackPanel
+$painelVol.Orientation = 'Horizontal'
+$painelVol.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+[void]$painelVol.Children.Add((Texto 'Volume' '#D1D5DB' 70))
+$slVol = New-Object Windows.Controls.Slider
+$slVol.Minimum = 0; $slVol.Maximum = 100; $slVol.Value = $config.volume * 100
+$slVol.Width = 85; $slVol.VerticalAlignment = 'Center'
+$lblVol = Texto ('{0}%' -f [int]($config.volume * 100)) '#9CA3AF' 32
+$lblVol.TextAlignment = 'Right'
+$slVol.Add_ValueChanged({
+    $v = $slVol.Value / 100
+    $lblVol.Text = '{0}%' -f [int]($slVol.Value)
+    $config.volume = [math]::Round($v, 2); $tocador.Volume = $v; SalvarConfig
+})
+[void]$painelVol.Children.Add($slVol)
+[void]$painelVol.Children.Add($lblVol)
+[void]$menu.Items.Add($painelVol)
+
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = 'Fechar'
 $fechar.Add_Click({ Anotar 'fechada pelo menu'; $win.Close() })
-# só anota: o erro segue o caminho de sempre
-$win.Dispatcher.Add_UnhandledException({ Anotar "erro: $($_.Exception.Message)" })
-$win.ContextMenu = New-Object Windows.Controls.ContextMenu
-[void]$win.ContextMenu.Items.Add($fechar)
+[void]$menu.Items.Add($fechar)
+$win.ContextMenu = $menu
+try { Add-Type -Namespace ClaudeMonitor -Name DWM -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr h, uint a, ref int v, uint s);' } catch {}
+$menu.Add_Opened({
+    try {
+        $src = [Windows.PresentationSource]::FromVisual($fechar)
+        if ($src -is [Windows.Interop.HwndSource]) {
+            $v = -2  # 0xFFFFFFFE = DWMWA_COLOR_NONE: remove a borda branca do popup
+            [ClaudeMonitor.DWM]::DwmSetWindowAttribute($src.Handle, 34, [ref]$v, 4)
+        }
+    } catch {}
+})
 
 # "sempre por cima" às vezes quebra: o Windows deixa janela normal passar na frente
 # (visto 29/09: VS Code, Fotos e Opera na frente dela). Se tiver alguma, volta pro
